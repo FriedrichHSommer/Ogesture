@@ -165,7 +165,7 @@ class BackIndicator(
 
         // Vertical follow: the pill moves this fraction of the finger's vertical travel,
         // so it hints at the drag direction without tracking it.
-        const val FOLLOW_FRACTION = 0.25f
+        const val FOLLOW_FRACTION = 1f
     }
 }
 
