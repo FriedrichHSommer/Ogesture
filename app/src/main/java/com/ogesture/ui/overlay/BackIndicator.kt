@@ -57,22 +57,24 @@ class BackIndicator(
     override fun attach() {
         if (attached) return
         val params = WindowManager.LayoutParams(
-            (pillSizePx + peekPx).toInt(),
-            zoneLengthPx + 2 * (pillSizePx + peekPx).toInt(),
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-            PixelFormat.TRANSLUCENT,
-        ).apply {
-            gravity = (if (fromLeftEdge) Gravity.START else Gravity.END) or Gravity.CENTER_VERTICAL
-            // With START/END gravity, x offsets away from that edge — clear of the nav bar.
-            x = edgeOffsetPx
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                fitInsetsTypes = 0
-            }
-        }
+    (pillSizePx + peekPx).toInt(),
+    WindowManager.LayoutParams.MATCH_PARENT,
+    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+        WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+    PixelFormat.TRANSLUCENT,
+).apply {
+    gravity =
+        (if (fromLeftEdge) Gravity.START else Gravity.END) or Gravity.TOP
+
+    x = edgeOffsetPx
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        fitInsetsTypes = 0
+    }
+}
         try {
             windowManager.addView(root, params)
             attached = true
@@ -134,12 +136,7 @@ class BackIndicator(
 
     /** rawY is in display coordinates; the window may not start at display y=0. */
     private fun pillY(rawY: Float): Float {
-    val screenLocation = IntArray(2)
-    root.getLocationOnScreen(screenLocation)
-
-    val localY = rawY - screenLocation[1]
-
-    return localY - pillSizePx / 2f
+    return rawY - pillSizePx / 2f
 }
 
     fun onArmed() {
