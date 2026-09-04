@@ -16,7 +16,8 @@ jobs:
       - name: Restore debug keystore
         run: |
           mkdir -p ~/.android
-          base64 -d keystore.b64 > ~/.android/debug.keystore
+          base64 -d keystore.b64 > /tmp/ks.p12
+          keytool -importkeystore -srckeystore /tmp/ks.p12 -srcstorepass android -destkeystore ~/.android/debug.keystore -deststoretype JKS -deststorepass android -srcalias androiddebugkey -destalias androiddebugkey -noprompt
           keytool -list -keystore ~/.android/debug.keystore -storepass android
       - name: Build debug APK
         run: |
