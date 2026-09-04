@@ -158,7 +158,7 @@ class BackIndicator(
     }
 
     private companion object {
-        const val PILL_SIZE_DP = 36f
+        const val PILL_SIZE_DP = 48f
         const val PEEK_DP = 10f
 
         // Vertical follow: the pill moves this fraction of the finger's vertical travel,
@@ -171,7 +171,7 @@ class BackIndicator(
 private class BackArrowView(context: Context) : View(context) {
 
     private val pillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xE0202124.toInt()
+        color = if (Build.VERSION.SDK_INT >= 31) context.getColor(android.R.color.system_accent1_300) else 0xE0202124.toInt()
         style = Paint.Style.FILL
     }
     private val arrowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
