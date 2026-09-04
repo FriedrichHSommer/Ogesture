@@ -1,0 +1,15 @@
+name: Generate debug keystore
+on:
+  workflow_dispatch:
+jobs:
+  gen:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate keystore
+        run: |
+          keytool -genkeypair -v -keystore debug.keystore -alias androiddebugkey -storepass android -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          base64 -w0 debug.keystore > debug.keystore.b64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: debug-keystore
+          path: debug.keystore.b64
