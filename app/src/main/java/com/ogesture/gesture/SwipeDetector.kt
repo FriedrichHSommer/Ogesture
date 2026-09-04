@@ -104,7 +104,7 @@ class SwipeDetector(
                         SwipeDirection.RIGHT -> dx >= minDistancePx && abs(dy) <= dx
                         SwipeDirection.LEFT -> -dx >= minDistancePx && abs(dy) <= -dx
                     }
-                    if (triggered) {
+                    if (triggered && event.eventTime - startTime >= MIN_SWIPE_MS) {
                         thresholdCrossed = true
                         feedback?.onArmed()
                         if (onLongSwipe != null) {
@@ -198,5 +198,6 @@ class SwipeDetector(
 
     private companion object {
         const val MAX_SAMPLES = 400
+        private const val MIN_SWIPE_MS = 200L
     }
 }
