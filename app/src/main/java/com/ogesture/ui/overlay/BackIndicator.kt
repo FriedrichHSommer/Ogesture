@@ -171,11 +171,17 @@ class BackIndicator(
 private class BackArrowView(context: Context) : View(context) {
 
     private val pillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = if (Build.VERSION.SDK_INT >= 31) context.getColor(android.R.color.system_accent1_300) else 0xE0202124.toInt()
-        style = Paint.Style.FILL
-    }
+    color = if (Build.VERSION.SDK_INT >= 31)
+        context.getColor(android.R.color.system_accent1_100)
+    else
+        0xFF202124.toInt()
+    style = Paint.Style.FILL
+}
     private val arrowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFFFFFFFF.toInt()
+        color = if (Build.VERSION.SDK_INT >= 31)
+    context.getColor(android.R.color.system_accent1_700)
+else
+    0xFFFFFFFF.toInt()
         style = Paint.Style.STROKE
         strokeWidth = 2.2f * context.resources.displayMetrics.density
         strokeCap = Paint.Cap.ROUND
