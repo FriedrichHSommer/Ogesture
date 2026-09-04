@@ -1,210 +1,202 @@
-package com.ogesture.ui.overlay
+package com.ogesture.gesture
 
 import android.content.Context
-import android.graphics.Canvas
-import android.graphics.Paint
-import android.graphics.Path
-import android.graphics.PixelFormat
-import android.graphics.Rect
-import android.os.Build
-import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
-import android.view.WindowManager
-import android.widget.FrameLayout
+import com.ogesture.data.SwipeDirection
+import kotlin.math.abs
 
-/**
- * A gesture-navigation style back arrow that peeks out from a side edge while the user
- * drags, mirroring the system back indicator: it slides out with the drag, pulses when
- * the gesture arms, and retracts (or fades out) when the finger lifts.
- *
- * Lives in its own non-touchable full-height overlay window so it can be drawn without
- * affecting the touch zones.
- */
-class BackIndicator(
+/** One recorded point of a touch, in display coordinates. */
+data class TouchSample(val x: Float, val y: Float, val timeMs: Long)
+
+class SwipeDetector(
     context: Context,
-    private val windowManager: WindowManager,
-    private val fromLeftEdge: Boolean,
-    private val armDistancePx: Float,
+    private val direction: SwipeDirection,
+    private val onShortSwipe: () -> Unit,
+    private val onLongSwipe: (() -> Unit)? = null,
+    minDistanceDp: Float = 24f,
+    private val holdMs: Long = 100L,
+    private val maxDurationMs: Long = 1000L,
+    holdStillnessDp: Float = 12f,
+    private val feedback: Feedback? = null,
     /**
-     * How far in from the physical edge the arrow should peek — the nav-bar inset when
-     * the 3-button bar occupies this edge (landscape), else 0. Without it the arrow
-     * would slide out underneath the opaque bar and never be seen.
+     * Called when a touch the zone consumed ends without firing any action (a tap, a
+     * long-press, a drag in the wrong direction...), so the caller can replay it to the
+     * UI underneath. Not called for cancelled or multi-finger touches.
      */
-    private val edgeOffsetPx: Int = 0,
-) : OverlayIndicator {
+    private val onUnusedTouch: ((List<TouchSample>) -> Unit)? = null,
+    /** Called at ACTION_DOWN, before anything else: this zone now owns the touch stream. */
+    private val onStreamStart: (() -> Unit)? = null,
+    /**
+     * Called when the stream ends (ACTION_UP or ACTION_CANCEL), after any onShortSwipe /
+     * onUnusedTouch callback for it has been dispatched.
+     */
+    private val onStreamEnd: (() -> Unit)? = null,
+) : View.OnTouchListener {
+
+    /** Progress hooks for drawing gesture indicators. All calls happen on the UI thread. */
+    interface Feedback {
+        fun onStart(rawX: Float, rawY: Float)
+        fun onProgress(distancePx: Float, rawX: Float, rawY: Float)
+        fun onArmed()
+        fun onEnd(fired: Boolean)
+    }
+
     private val density = context.resources.displayMetrics.density
-    private val pillSizePx = (PILL_SIZE_DP * density)
-    private val peekPx = (PEEK_DP * density)
+    val minDistancePx = minDistanceDp * density
+    private val holdStillnessPx = holdStillnessDp * density
 
-    private val root = FrameLayout(context)
-    private val arrow = BackArrowView(context).apply {
-        val size = pillSizePx.toInt()
-        layoutParams = FrameLayout.LayoutParams(size, size).apply {
-            gravity = (if (fromLeftEdge) Gravity.START else Gravity.END) or Gravity.TOP
-        }
-        alpha = 0f
+    private var startX = 0f
+    private var startY = 0f
+    private var startTime = 0L
+    private var anchorX = 0f
+    private var anchorY = 0f
+    private var tracking = false
+    private var thresholdCrossed = false
+    private var longFired = false
+    private var anchorView: View? = null
+    private val samples = ArrayList<TouchSample>(64)
+    private var replayable = false
+
+    // Armed while the finger is stationary after the threshold; any movement beyond
+    // holdStillnessPx re-anchors and restarts it, so the hold can happen anywhere
+    // along the swipe, not just at the threshold point.
+    private val longRunnable = Runnable {
+        if (!tracking || !thresholdCrossed || longFired) return@Runnable
+        longFired = true
+        onLongSwipe?.invoke()
     }
-    private var attached = false
-    private var windowHidden = false
-    private val windowLocation = IntArray(2)
-    private var anchorRawY = 0f
 
-    init {
-        root.addView(arrow)
-    }
-
-    override fun attach() {
-        if (attached) return
-        val params = WindowManager.LayoutParams(
-            (pillSizePx + peekPx).toInt(),
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-            PixelFormat.TRANSLUCENT,
-        ).apply {
-            gravity = (if (fromLeftEdge) Gravity.START else Gravity.END) or Gravity.TOP
-            // With START/END gravity, x offsets away from that edge — clear of the nav bar.
-            x = edgeOffsetPx
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                fitInsetsTypes = 0
+    override fun onTouch(v: View, event: MotionEvent): Boolean {
+        anchorView = v
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                onStreamStart?.invoke()
+                reset()
+                startX = event.rawX
+                startY = event.rawY
+                startTime = event.eventTime
+                tracking = true
+                replayable = onUnusedTouch != null
+                addSample(event)
+                feedback?.onStart(event.rawX, event.rawY)
+                return true
+            }
+            MotionEvent.ACTION_MOVE -> {
+                addSample(event)
+                if (!tracking) return true
+                val distance = when (direction) {
+                    SwipeDirection.UP -> startY - event.rawY
+                    SwipeDirection.RIGHT -> event.rawX - startX
+                    SwipeDirection.LEFT -> startX - event.rawX
+                }
+                feedback?.onProgress(distance, event.rawX, event.rawY)
+                if (!thresholdCrossed) {
+                    if ((event.eventTime - startTime) > maxDurationMs) {
+                        tracking = false
+                        feedback?.onEnd(false)
+                        return true
+                    }
+                    val dx = event.rawX - startX
+                    val dy = event.rawY - startY
+                    val triggered = when (direction) {
+                        SwipeDirection.UP -> -dy >= minDistancePx && abs(dx) <= -dy
+                        SwipeDirection.RIGHT -> dx >= minDistancePx && abs(dy) <= dx
+                        SwipeDirection.LEFT -> -dx >= minDistancePx && abs(dy) <= -dx
+                    }
+                    if (triggered) {
+                        thresholdCrossed = true
+                        feedback?.onArmed()
+                        if (onLongSwipe != null) {
+                            anchorX = event.rawX
+                            anchorY = event.rawY
+                            v.postDelayed(longRunnable, holdMs)
+                        }
+                        // The short action fires on ACTION_UP so indicators can show the
+                        // armed state (and a long action can still take over).
+                    }
+                } else {
+                    val currentDistance = when (direction) {
+                        SwipeDirection.UP -> startY - event.rawY
+                        SwipeDirection.RIGHT -> event.rawX - startX
+                        SwipeDirection.LEFT -> startX - event.rawX
+                    }
+                    if (currentDistance < minDistancePx / 2f) {
+                        thresholdCrossed = false
+                         replayable = false
+                        feedback?.onEnd(false)
+                    } else if (!longFired) {
+                        val moved = abs(event.rawX - anchorX) > holdStillnessPx ||
+                            abs(event.rawY - anchorY) > holdStillnessPx
+                        if (moved && onLongSwipe != null) {
+                            anchorX = event.rawX
+                            anchorY = event.rawY
+                            v.removeCallbacks(longRunnable)
+                            v.postDelayed(longRunnable, holdMs)
+                        }
+                    }
+                }
+                return true
+            }
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                cancelPending()
+                if (tracking) feedback?.onEnd(false)
+                tracking = false
+                dropSamples()
+                return true
+            }
+            MotionEvent.ACTION_UP -> {
+                addSample(event)
+                val crossed = thresholdCrossed
+                val wasTracking = tracking
+                val didLong = longFired
+                cancelPending()
+                tracking = false
+                val fires = wasTracking && crossed && !didLong
+                feedback?.onEnd(fires || didLong)
+                if (fires) onShortSwipe()
+                if (!fires && !didLong && replayable && samples.isNotEmpty()) {
+                    onUnusedTouch?.invoke(samples.toList())
+                }
+                dropSamples()
+                onStreamEnd?.invoke()
+                return true
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                cancelPending()
+                if (tracking) feedback?.onEnd(false)
+                tracking = false
+                dropSamples()
+                onStreamEnd?.invoke()
+                return true
             }
         }
-        try {
-            windowManager.addView(root, params)
-            attached = true
-        } catch (_: Throwable) {
-            // Indicator is cosmetic; the gesture keeps working without it.
+        return false
+    }
+
+    private fun cancelPending() {
+        anchorView?.removeCallbacks(longRunnable)
+    }
+
+    private fun addSample(event: MotionEvent) {
+        if (replayable && samples.size < MAX_SAMPLES) {
+            samples.add(TouchSample(event.rawX, event.rawY, event.eventTime))
         }
     }
 
-    override fun detach() {
-        if (!attached) return
-        try {
-            windowManager.removeView(root)
-        } catch (_: Throwable) {
-        }
-        attached = false
+    private fun dropSamples() {
+        samples.clear()
+        replayable = false
     }
 
-    override fun setWindowHidden(hidden: Boolean) {
-        if (!attached) return
-        windowHidden = hidden
-        val lp = root.layoutParams as? WindowManager.LayoutParams ?: return
-        val newAlpha = if (hidden) 0f else 1f
-        if (lp.alpha == newAlpha) return
-        lp.alpha = newAlpha
-        try {
-            windowManager.updateViewLayout(root, lp)
-        } catch (_: Throwable) {
-        }
-    }
-
-    override fun windowBounds(): Rect? {
-        if (!attached || windowHidden) return null
-        val loc = IntArray(2)
-        root.getLocationOnScreen(loc)
-        return Rect(loc[0], loc[1], loc[0] + root.width, loc[1] + root.height)
-    }
-
-    fun onGestureStart(rawY: Float) {
-        arrow.animate().cancel()
-        arrow.scaleX = 1f
-        arrow.scaleY = 1f
-        arrow.alpha = 1f
-        anchorRawY = rawY
-        arrow.translationY = pillY(rawY)
-        applyProgress(0f)
-    }
-
-    fun onGestureProgress(distancePx: Float, rawY: Float) {
-        arrow.translationY = pillY(followedRawY(rawY))
-        applyProgress((distancePx / armDistancePx).coerceIn(0f, 1f))
-    }
-
-    /**
-     * The pill anchors where the gesture began and only drifts a fraction of the finger's
-     * vertical travel, so it nods toward the drag without chasing the finger.
-     */
-    private fun followedRawY(rawY: Float): Float =
-        anchorRawY + (rawY - anchorRawY) * FOLLOW_FRACTION
-
-    /** rawY is in display coordinates; the window may not start at display y=0. */
-    private fun pillY(rawY: Float): Float {
-        root.getLocationOnScreen(windowLocation)
-        return rawY - windowLocation[1] - pillSizePx / 2f
-    }
-
-    fun onArmed() {
-        applyProgress(1f)
-    }
-
-    fun onGestureEnd(fired: Boolean) {
-        val retractX = if (fromLeftEdge) -pillSizePx else pillSizePx
-        arrow.animate()
-            .translationX(retractX)
-            .alpha(0f)
-            .setDuration(if (fired) 120L else 180L)
-            .start()
-    }
-
-    /** 0 = fully hidden behind the edge, 1 = fully peeked out. */
-    private fun applyProgress(fraction: Float) {
-        val hidden = if (fromLeftEdge) -pillSizePx else pillSizePx
-        val shown = if (fromLeftEdge) peekPx else -peekPx
-        arrow.translationX = hidden + (shown - hidden) * fraction
+    private fun reset() {
+        cancelPending()
+        thresholdCrossed = false
+        longFired = false
+        dropSamples()
     }
 
     private companion object {
-        const val PILL_SIZE_DP = 48f
-        const val PEEK_DP = 18f
-
-        // Vertical follow: the pill moves this fraction of the finger's vertical travel,
-        // so it hints at the drag direction without tracking it.
-        const val FOLLOW_FRACTION = 0.25f
-    }
-}
-
-/** A round dark pill with a left-pointing "back" chevron, whichever edge it comes from. */
-private class BackArrowView(context: Context) : View(context) {
-
-    private val pillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-    color = if (Build.VERSION.SDK_INT >= 31)
-    context.getColor(android.R.color.system_accent1_100) or 0xFF000000.toInt()
-else
-    0xFF202124.toInt()
-    style = Paint.Style.FILL
-}
-    private val arrowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = if (Build.VERSION.SDK_INT >= 31)
-    context.getColor(android.R.color.system_accent1_700)
-else
-    0xFFFFFFFF.toInt()
-        style = Paint.Style.STROKE
-        strokeWidth = 3.0f * context.resources.displayMetrics.density
-        strokeCap = Paint.Cap.ROUND
-        strokeJoin = Paint.Join.ROUND
-    }
-    private val chevron = Path()
-
-    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
-        super.onSizeChanged(w, h, oldw, oldh)
-        val cx = w / 2f
-        val cy = h / 2f
-        val arm = w * 0.13f
-        val tip = cx - arm * 0.7f
-        val tail = cx + arm * 0.7f
-        chevron.reset()
-        chevron.moveTo(tail, cy - arm * 1.4f)
-        chevron.lineTo(tip, cy)
-        chevron.lineTo(tail, cy + arm * 1.4f)
-    }
-
-    override fun onDraw(canvas: Canvas) {
-        super.onDraw(canvas)
-        canvas.drawCircle(width / 2f, height / 2f, width / 2f, pillPaint)
-        canvas.drawPath(chevron, arrowPaint)
+        const val MAX_SAMPLES = 400
     }
 }
