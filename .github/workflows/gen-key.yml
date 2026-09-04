@@ -1,6 +1,8 @@
 name: Generate debug keystore
 on:
   workflow_dispatch:
+permissions:
+  contents: write
 jobs:
   gen:
     runs-on: ubuntu-latest
