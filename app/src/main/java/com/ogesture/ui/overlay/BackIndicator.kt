@@ -134,9 +134,13 @@ class BackIndicator(
 
     /** rawY is in display coordinates; the window may not start at display y=0. */
     private fun pillY(rawY: Float): Float {
-        root.getLocationOnScreen(windowLocation)
-        return rawY - windowLocation[1] - pillSizePx / 2f
-    }
+    val screenLocation = IntArray(2)
+    root.getLocationOnScreen(screenLocation)
+
+    val localY = rawY - screenLocation[1]
+
+    return localY - pillSizePx / 2f
+}
 
     fun onArmed() {
         applyProgress(1f)
