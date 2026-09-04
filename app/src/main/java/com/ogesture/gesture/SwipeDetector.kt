@@ -123,6 +123,7 @@ class SwipeDetector(
                     }
                     if (currentDistance < minDistancePx / 2f) {
                         thresholdCrossed = false
+                         replayable = false
                         feedback?.onEnd(false)
                     } else if (!longFired) {
                         val moved = abs(event.rawX - anchorX) > holdStillnessPx ||
