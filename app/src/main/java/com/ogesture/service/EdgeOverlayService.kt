@@ -286,8 +286,9 @@ class EdgeOverlayService : LifecycleService() {
                     }
                 }
                 activeViews[zone.id] = view
-                // indicator.attach()
-                // indicators[zone.id] = indicator
+                zoneLengthPx = geometry.height * zone.lengthPercent / 100,
+                indicator.attach()
+                indicators[zone.id] = indicator
             } catch (t: Throwable) {
                 Log.e(TAG, "Failed to add overlay for ${zone.id}", t)
             }
