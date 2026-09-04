@@ -147,7 +147,6 @@ class BackIndicator(
             .translationX(retractX)
             .alpha(0f)
             .setDuration(if (fired) 120L else 180L)
-            .setInterpolator(android.view.animation.DecelerateInterpolator(2f))
             .start()
     }
 
@@ -177,7 +176,6 @@ private class BackArrowView(context: Context) : View(context) {
 else
     0xFF202124.toInt()
     style = Paint.Style.FILL
-    alpha = 255
 }
     private val arrowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = if (Build.VERSION.SDK_INT >= 31)
