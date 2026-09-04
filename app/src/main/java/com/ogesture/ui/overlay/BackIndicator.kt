@@ -31,8 +31,8 @@ class BackIndicator(
      * would slide out underneath the opaque bar and never be seen.
      */
     private val edgeOffsetPx: Int = 0,
-) : OverlayIndicator {
     private val zoneLengthPx: Int = 0,
+) : OverlayIndicator {
     private val density = context.resources.displayMetrics.density
     private val pillSizePx = (PILL_SIZE_DP * density)
     private val peekPx = (PEEK_DP * density)
@@ -41,7 +41,7 @@ class BackIndicator(
     private val arrow = BackArrowView(context).apply {
         val size = pillSizePx.toInt()
         layoutParams = FrameLayout.LayoutParams(size, size).apply {
-            gravity = (if (fromLeftEdge) Gravity.START else Gravity.END) or or Gravity.CENTER_VERTICAL
+            gravity = (if (fromLeftEdge) Gravity.START else Gravity.END) or Gravity.CENTER_VERTICAL
         }
         alpha = 0f
     }
