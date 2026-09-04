@@ -26,6 +26,6 @@ data class ZoneConfig(
  */
 val GESTURE_ZONES = listOf(
     ZoneConfig(ZoneId.BOTTOM, GestureAction.HOME, longAction = GestureAction.RECENTS, lengthPercent = 80, thicknessDp = 12),
-    ZoneConfig(ZoneId.LEFT_EDGE, GestureAction.BACK, longAction = null, lengthPercent = 80, thicknessDp = 16),
-    ZoneConfig(ZoneId.RIGHT_EDGE, GestureAction.BACK, longAction = null, lengthPercent = 80, thicknessDp = 16),
+    ZoneConfig(ZoneId.LEFT_EDGE, GestureAction.BACK, longAction = null, lengthPercent = 25, thicknessDp = 20),
+    ZoneConfig(ZoneId.RIGHT_EDGE, GestureAction.BACK, longAction = null, lengthPercent = 25, thicknessDp = 20),
 )
