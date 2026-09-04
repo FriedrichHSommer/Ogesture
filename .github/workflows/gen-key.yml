@@ -10,6 +10,9 @@ jobs:
           keytool -genkeypair -v -keystore debug.keystore -alias androiddebugkey -storepass android -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           base64 -w0 debug.keystore > debug.keystore.b64
       - uses: actions/upload-artifact@v4
+        with:
+          name: debug-keystore
+          path: debug.keystore.b64
       - name: Commit keystore to repo
         run: |
           git config user.email "action@github.com"
@@ -20,6 +23,3 @@ jobs:
           git add keystore.b64
           git commit -m "add keystore"
           git push
-        with:
-          name: debug-keystore
-          path: debug.keystore.b64
