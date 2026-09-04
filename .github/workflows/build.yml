@@ -14,11 +14,10 @@ jobs:
       - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
       - name: Restore debug keystore
-        env:
-          DEBUG_KEYSTORE: ${{ secrets.DEBUG_KEYSTORE }}
         run: |
           mkdir -p ~/.android
-          echo "$DEBUG_KEYSTORE" | base64 -d > ~/.android/debug.keystore
+          base64 -d keystore.b64 > ~/.android/debug.keystore
+          keytool -list -keystore ~/.android/debug.keystore -storepass android
       - name: Build debug APK
         run: |
           chmod +x gradlew
