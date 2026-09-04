@@ -147,6 +147,7 @@ class BackIndicator(
             .translationX(retractX)
             .alpha(0f)
             .setDuration(if (fired) 120L else 180L)
+            .setInterpolator(android.view.animation.DecelerateInterpolator(2f))
             .start()
     }
 
@@ -159,7 +160,7 @@ class BackIndicator(
 
     private companion object {
         const val PILL_SIZE_DP = 48f
-        const val PEEK_DP = 20f
+        const val PEEK_DP = 18f
 
         // Vertical follow: the pill moves this fraction of the finger's vertical travel,
         // so it hints at the drag direction without tracking it.
@@ -171,11 +172,9 @@ class BackIndicator(
 private class BackArrowView(context: Context) : View(context) {
 
     private val pillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-    color = if (Build.VERSION.SDK_INT >= 31)
-    context.getColor(android.R.color.system_accent1_100) or 0xFF000000.toInt()
-else
-    0xFF202124.toInt()
+    color = 0xFFF2EFE9.toInt()
     style = Paint.Style.FILL
+    alpha = 255
 }
     private val arrowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = if (Build.VERSION.SDK_INT >= 31)
