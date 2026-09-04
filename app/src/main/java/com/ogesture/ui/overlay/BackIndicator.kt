@@ -32,6 +32,7 @@ class BackIndicator(
      */
     private val edgeOffsetPx: Int = 0,
 ) : OverlayIndicator {
+    private val zoneLengthPx: Int = 0,
     private val density = context.resources.displayMetrics.density
     private val pillSizePx = (PILL_SIZE_DP * density)
     private val peekPx = (PEEK_DP * density)
@@ -40,7 +41,7 @@ class BackIndicator(
     private val arrow = BackArrowView(context).apply {
         val size = pillSizePx.toInt()
         layoutParams = FrameLayout.LayoutParams(size, size).apply {
-            gravity = (if (fromLeftEdge) Gravity.START else Gravity.END) or Gravity.TOP
+            gravity = (if (fromLeftEdge) Gravity.START else Gravity.END) or or Gravity.CENTER_VERTICAL
         }
         alpha = 0f
     }
@@ -57,7 +58,7 @@ class BackIndicator(
         if (attached) return
         val params = WindowManager.LayoutParams(
             (pillSizePx + peekPx).toInt(),
-            WindowManager.LayoutParams.MATCH_PARENT,
+            zoneLengthPx,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
@@ -65,7 +66,7 @@ class BackIndicator(
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT,
         ).apply {
-            gravity = (if (fromLeftEdge) Gravity.START else Gravity.END) or Gravity.TOP
+            gravity = (if (fromLeftEdge) Gravity.START else Gravity.END) or Gravity.CENTER_VERTICAL
             // With START/END gravity, x offsets away from that edge — clear of the nav bar.
             x = edgeOffsetPx
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
