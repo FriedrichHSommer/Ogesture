@@ -458,7 +458,7 @@ class EdgeOverlayService : LifecycleService() {
     }
 
     private fun hapticTick() {
-        val effect = VibrationEffect.createOneShot(6L, VibrationEffect.DEFAULT_AMPLITUDE)
+        val effect = VibrationEffect.createOneShot(4L, VibrationEffect.DEFAULT_AMPLITUDE)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val mgr = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
             mgr?.defaultVibrator?.vibrate(effect)
