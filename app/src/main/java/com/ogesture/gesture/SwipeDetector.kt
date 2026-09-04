@@ -198,6 +198,6 @@ class SwipeDetector(
 
     private companion object {
         const val MAX_SAMPLES = 400
-        private const val MIN_SWIPE_MS = 200L
+        private const val MIN_SWIPE_MS = 150L
     }
 }
