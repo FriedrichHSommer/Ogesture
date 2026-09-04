@@ -115,14 +115,24 @@ class SwipeDetector(
                         // The short action fires on ACTION_UP so indicators can show the
                         // armed state (and a long action can still take over).
                     }
-                } else if (!longFired) {
-                    val moved = abs(event.rawX - anchorX) > holdStillnessPx ||
-                        abs(event.rawY - anchorY) > holdStillnessPx
-                    if (moved && onLongSwipe != null) {
-                        anchorX = event.rawX
-                        anchorY = event.rawY
-                        v.removeCallbacks(longRunnable)
-                        v.postDelayed(longRunnable, holdMs)
+                } else {
+                    val currentDistance = when (direction) {
+                        SwipeDirection.UP -> startY - event.rawY
+                        SwipeDirection.RIGHT -> event.rawX - startX
+                        SwipeDirection.LEFT -> startX - event.rawX
+                    }
+                    if (currentDistance < minDistancePx / 2f) {
+                        thresholdCrossed = false
+                        feedback?.onEnd(false)
+                    } else if (!longFired) {
+                        val moved = abs(event.rawX - anchorX) > holdStillnessPx ||
+                            abs(event.rawY - anchorY) > holdStillnessPx
+                        if (moved && onLongSwipe != null) {
+                            anchorX = event.rawX
+                            anchorY = event.rawY
+                            v.removeCallbacks(longRunnable)
+                            v.postDelayed(longRunnable, holdMs)
+                        }
                     }
                 }
                 return true
