@@ -159,7 +159,7 @@ class BackIndicator(
 
     private companion object {
         const val PILL_SIZE_DP = 48f
-        const val PEEK_DP = 10f
+        const val PEEK_DP = 20f
 
         // Vertical follow: the pill moves this fraction of the finger's vertical travel,
         // so it hints at the drag direction without tracking it.
