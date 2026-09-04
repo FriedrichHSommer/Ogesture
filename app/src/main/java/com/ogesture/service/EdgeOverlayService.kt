@@ -220,6 +220,7 @@ class EdgeOverlayService : LifecycleService() {
                         fromLeftEdge = zone.id == ZoneId.LEFT_EDGE,
                         armDistancePx = armDistancePx,
                         edgeOffsetPx = if (zone.id == ZoneId.LEFT_EDGE) geometry.navLeft else geometry.navRight,
+                        zoneLengthPx = geometry.height * zone.lengthPercent / 100,
                     )
                     indicator = ind
                     feedback = object : SwipeDetector.Feedback {
