@@ -44,6 +44,7 @@ class HomeIndicator(
     }
 
     override fun attach() {
+        return
         if (attached) return
         val params = WindowManager.LayoutParams(
             barWidthPx,
