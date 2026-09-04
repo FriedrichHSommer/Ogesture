@@ -17,11 +17,11 @@ jobs:
           path: debug.keystore.b64
       - name: Commit keystore to repo
         run: |
-          git config user.email "action@github.com"
-          git config user.name "GitHub Actions"
           git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} tmprepo
           cp debug.keystore.b64 tmprepo/keystore.b64
           cd tmprepo
+          git config user.email "action@github.com"
+          git config user.name "GitHub Actions"
           git add keystore.b64
           git commit -m "add keystore"
           git push
