@@ -287,7 +287,6 @@ class EdgeOverlayService : LifecycleService() {
                     }
                 }
                 activeViews[zone.id] = view
-                zoneLengthPx = geometry.height * zone.lengthPercent / 100,
                 indicator.attach()
                 indicators[zone.id] = indicator
             } catch (t: Throwable) {
