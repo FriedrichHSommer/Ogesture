@@ -145,7 +145,10 @@ class BackIndicator(
     /** rawY is in display coordinates; the window may not start at display y=0. */
     private fun pillY(rawY: Float): Float {
         root.getLocationOnScreen(windowLocation)
-        return rawY - windowLocation[1] - pillSizePx / 2f
+        return rawY -
+    windowLocation[1] -
+    pillSizePx / 2f -
+    48f * density
 }
 
     fun onArmed() {
