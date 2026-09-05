@@ -38,15 +38,13 @@ class BackIndicator(
     private val peekPx = (PEEK_DP * density)
 
     private val root = FrameLayout(context)
-    // private val arrow = BackArrowView(context).apply {
-    private val arrow = View(context).apply {
+    private val arrow = BackArrowView(context).apply {
         val size = pillSizePx.toInt()
         layoutParams = FrameLayout.LayoutParams(size, size).apply {
             gravity = (if (fromLeftEdge) Gravity.START else Gravity.END) or Gravity.TOP
         }
         setBackgroundColor(0xFFFF0000.toInt())
-        alpha = 1f
-        // alpha = 0f
+        alpha = 0f
     }
     private var attached = false
     private var windowHidden = false
@@ -69,8 +67,7 @@ class BackIndicator(
         WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
         WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
         WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-    // PixelFormat.TRANSLUCENT,
-    PixelFormat.OPAQUE,        
+    PixelFormat.TRANSLUCENT,    
 ).apply {
     gravity =
         (if (fromLeftEdge) Gravity.START else Gravity.END) or
@@ -181,11 +178,6 @@ class BackIndicator(
 
 /** A round dark pill with a left-pointing "back" chevron, whichever edge it comes from. */
 private class BackArrowView(context: Context) : View(context) {
-
-    init {
-        setLayerType(View.LAYER_TYPE_SOFTWARE, null)
-    }
-
     private val pillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
     color = 0xFFF2EFE9.toInt()
     style = Paint.Style.FILL
@@ -217,11 +209,8 @@ else
     }
 
     override fun onDraw(canvas: Canvas) {
-        setAlpha(1f)
         super.onDraw(canvas)
-        // canvas.drawCircle(width / 2f, height / 2f, width / 2f, pillPaint)
-        // canvas.drawPath(chevron, arrowPaint
-        canvas.drawColor(0xFFFF0000.toInt())
-        canvas.drawPath(chevron, arrowPaint)
+        canvas.drawCircle(width / 2f, height / 2f, width / 2f, pillPaint)
+        canvas.drawPath(chevron, arrowPaint
     }
 }
