@@ -64,7 +64,8 @@ class BackIndicator(
         WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
         WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
         WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-    PixelFormat.TRANSLUCENT,
+    // PixelFormat.TRANSLUCENT,
+    PixelFormat.OPAQUE,        
 ).apply {
     gravity =
         (if (fromLeftEdge) Gravity.START else Gravity.END) or
