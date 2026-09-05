@@ -207,7 +207,9 @@ else
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        canvas.drawCircle(width / 2f, height / 2f, width / 2f, pillPaint)
+        // canvas.drawCircle(width / 2f, height / 2f, width / 2f, pillPaint)
+        // canvas.drawPath(chevron, arrowPaint
+        canvas.drawColor(0xFFFF0000.toInt())
         canvas.drawPath(chevron, arrowPaint)
     }
 }
