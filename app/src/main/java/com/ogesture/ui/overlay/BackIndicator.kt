@@ -163,11 +163,16 @@ class BackIndicator(
     }
 
     /** 0 = fully hidden behind the edge, 1 = fully peeked out. */
-    private fun applyProgress(fraction: Float) 
-    {
-        val hidden = if (fromLeftEdge) -pillSizePx else pillSizePx
-        val shown = if (fromLeftEdge) peekPx else -peekPx
-        arrow.translationX = hidden + (shown - hidden) * fraction   
+    
+    private fun applyProgress(fraction: Float) {
+        val edgeMargin = 4f * density
+        val activeMargin = 14f * density
+    
+        arrow.translationX = if (fromLeftEdge) {        
+            edgeMargin + (activeMargin - edgeMargin) * fraction
+        } else {
+            -edgeMargin - (activeMargin - edgeMargin) * fraction
+        }
         arrow.setRevealProgress(fraction)
     }
 
