@@ -58,7 +58,7 @@ class BackIndicator(
         if (attached) return
         val params = WindowManager.LayoutParams(
     (pillSizePx + peekPx).toInt(),
-    WindowManager.LayoutParams.MATCH_PARENT,
+    zoneLengthPx + 2 * (pillSizePx + peekPx).toInt(),
     WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
     WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
         WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
@@ -67,7 +67,8 @@ class BackIndicator(
     PixelFormat.TRANSLUCENT,
 ).apply {
     gravity =
-        (if (fromLeftEdge) Gravity.START else Gravity.END) or Gravity.TOP
+        (if (fromLeftEdge) Gravity.START else Gravity.END) or
+            Gravity.CENTER_VERTICAL
 
     x = edgeOffsetPx
 
@@ -136,7 +137,8 @@ class BackIndicator(
 
     /** rawY is in display coordinates; the window may not start at display y=0. */
     private fun pillY(rawY: Float): Float {
-    return rawY - pillSizePx / 2f
+        root.getLocationOnScreen(windowLocation)
+        return rawY - windowLocation[1] - pillSizePx / 2f
 }
 
     fun onArmed() {
