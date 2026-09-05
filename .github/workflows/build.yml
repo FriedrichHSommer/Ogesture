@@ -27,3 +27,16 @@ jobs:
         with:
           name: ogesture-debug
           path: app/build/outputs/apk/debug/*.apk
+      - name: Show debug keystore fingerprint
+        run: |
+          keytool -list -v \
+            -keystore ~/.android/debug.keystore \
+            -alias androiddebugkey \
+            -storepass android | \
+            grep -E "SHA1:|SHA256:"
+
+      - name: Show APK signing certificate
+        run: |
+          keytool -printcert \
+            -jarfile app/build/outputs/apk/debug/app-debug.apk | \
+            grep -E "SHA1:|SHA256:"
