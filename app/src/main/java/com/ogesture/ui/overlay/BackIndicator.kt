@@ -11,6 +11,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
+import android.os.SystemClock
 
 /**
  * A gesture-navigation style back arrow that peeks out from a side edge while the user
@@ -49,6 +50,10 @@ class BackIndicator(
     private var windowHidden = false
     private val windowLocation = IntArray(2)
     private var anchorRawY = 0f
+    private var gestureStartTime = 0L
+    private var lastProgressTime = 0L
+    private var lastProgressDistance = 0f
+    private var lastVelocityPxPerSec = 0f
 
     init {
         root.addView(arrow)
@@ -115,25 +120,49 @@ class BackIndicator(
 
     fun onGestureStart(rawY: Float) {
         arrow.animate().cancel()
+
         arrow.scaleX = 1f
         arrow.scaleY = 1f
         arrow.alpha = 1f
+   
         anchorRawY = rawY
-        
-        arrow.translationY = pillY(rawY).coerceIn(
-            0f,
-            (root.height - pillSizePx).coerceAtLeast(0f)
-        )
-        applyProgress(0f)
-    }
+
+    val now = SystemClock.uptimeMillis()
+    gestureStartTime = now
+    lastProgressTime = now
+    lastProgressDistance = 0f
+    lastVelocityPxPerSec = 0f
+
+    arrow.translationY = pillY(rawY).coerceIn(
+        0f,
+        (root.height - pillSizePx).coerceAtLeast(0f)
+    )
+
+    applyProgress(0f)
+}
 
     fun onGestureProgress(distancePx: Float, rawY: Float) {
-        arrow.translationY = pillY(followedRawY(rawY)).coerceIn(
-            0f,
-            (root.height - pillSizePx).coerceAtLeast(0f)
-        )
-        applyProgress((distancePx / armDistancePx).coerceIn(0f, 1f))
+    val now = SystemClock.uptimeMillis()
+    val dt = now - lastProgressTime
+
+    if (dt > 0L) {
+        val distanceDelta = distancePx - lastProgressDistance
+        lastVelocityPxPerSec =
+            (distanceDelta / dt.toFloat()) * 1000f
     }
+
+    lastProgressTime = now
+    lastProgressDistance = distancePx
+
+    arrow.translationY = pillY(followedRawY(rawY)).coerceIn(
+        0f,
+        (root.height - pillSizePx).coerceAtLeast(0f)
+    )
+
+    applyProgress(
+        (distancePx / armDistancePx).coerceIn(0f, 1f)
+    )
+}
 
     /**
      * The pill anchors where the gesture began and only drifts a fraction of the finger's
@@ -156,14 +185,51 @@ class BackIndicator(
     }
 
     fun onGestureEnd(fired: Boolean) {
-        val retractX = if (fromLeftEdge) -pillSizePx else pillSizePx
+    val retractX = if (fromLeftEdge) -pillSizePx else pillSizePx
+
+    val now = SystemClock.uptimeMillis()
+    val gestureDuration = now - gestureStartTime
+
+    val isFling =
+        fired &&
+        lastVelocityPxPerSec >= 3000f
+
+    if (isFling) {
+        val remaining =
+            (235L - gestureDuration).coerceAtLeast(0L)
+
+        arrow.animate().cancel()
+
+        arrow.animate()
+            .setDuration(remaining)
+            .setInterpolator(
+                android.view.animation.DecelerateInterpolator()
+            )
+            .start()
+
+        arrow.postDelayed({
+            arrow.setRevealProgress(1f)
+
+            arrow.animate()
+                .translationX(retractX)
+                .alpha(0f)
+                .setDuration(120L)
+                .setInterpolator(
+                    android.view.animation.DecelerateInterpolator(2f)
+                )
+                .start()
+        }, remaining)
+    } else {
         arrow.animate()
             .translationX(retractX)
             .alpha(0f)
             .setDuration(if (fired) 120L else 180L)
-            .setInterpolator(android.view.animation.DecelerateInterpolator(2f))
+            .setInterpolator(
+                android.view.animation.DecelerateInterpolator(2f)
+            )
             .start()
     }
+}
 
     /** 0 = fully hidden behind the edge, 1 = fully peeked out. */
     
