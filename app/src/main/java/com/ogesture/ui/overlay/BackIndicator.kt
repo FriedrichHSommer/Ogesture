@@ -71,6 +71,7 @@ class BackIndicator(
             Gravity.CENTER_VERTICAL
 
     x = edgeOffsetPx
+    alpha = 1f
 
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
         fitInsetsTypes = 0
