@@ -165,16 +165,17 @@ class BackIndicator(
     /** 0 = fully hidden behind the edge, 1 = fully peeked out. */
     
     private fun applyProgress(fraction: Float) {
-        val edgeMargin = 4f * density
-        val activeMargin = 14f * density
-    
-        arrow.translationX = if (fromLeftEdge) {        
-            edgeMargin + (activeMargin - edgeMargin) * fraction
-        } else {
-            -edgeMargin - (activeMargin - edgeMargin) * fraction
-        }
-        arrow.setRevealProgress(fraction)
+    val edgeMargin = 4f * density
+    val activeMargin = 14f * density
+
+    arrow.translationX = if (fromLeftEdge) {
+        edgeMargin + (activeMargin - edgeMargin) * fraction
+    } else {
+        -edgeMargin - (activeMargin - edgeMargin) * fraction
     }
+
+    arrow.setRevealProgress(fraction)
+}
 
     private companion object {
         const val PILL_SIZE_DP = 48f
