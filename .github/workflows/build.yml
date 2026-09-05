@@ -32,11 +32,9 @@ jobs:
           keytool -list -v \
             -keystore ~/.android/debug.keystore \
             -alias androiddebugkey \
-            -storepass android | \
-            grep -E "SHA1:|SHA256:"
-
+            -storepass android
       - name: Show APK signing certificate
         run: |
-          keytool -printcert \
-            -jarfile app/build/outputs/apk/debug/app-debug.apk | \
-            grep -E "SHA1:|SHA256:"
+          APK=$(find . -type f -name "*.apk" | head -n 1)
+          echo "Found APK: $APK"
+          keytool -printcert -jarfile "$APK"
