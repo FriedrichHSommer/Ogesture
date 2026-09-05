@@ -196,17 +196,11 @@ private class BackArrowView(
     private val density = context.resources.displayMetrics.density
 
     private val pillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFFF2EFE9.toInt()
         style = Paint.Style.FILL
         alpha = 255
     }
 
     private val arrowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = if (Build.VERSION.SDK_INT >= 31) {
-            context.getColor(android.R.color.system_accent1_700)
-        } else {
-            0xFFFFFFFF.toInt()
-        }
         style = Paint.Style.STROKE
         strokeWidth = 3.0f * density
         strokeCap = Paint.Cap.ROUND
@@ -214,6 +208,54 @@ private class BackArrowView(
     }
 
     private var revealProgress = 0f
+
+    private val widthInterpolator =
+        android.view.animation.PathInterpolator(
+            0.19f, 1.27f,
+            0.71f, 0.86f
+        )
+
+    init {
+        val resources = context.resources
+
+        val backgroundId = resources.getIdentifier(
+            if (isNightMode(resources)) {
+                "system_accent2_700"
+            } else {
+                "system_accent2_100"
+            },
+            "color",
+            "android"
+        )
+
+        val arrowId = resources.getIdentifier(
+            if (isNightMode(resources)) {
+                "system_accent1_200"
+            } else {
+                "system_accent1_700"
+            },
+            "color",
+            "android"
+        )
+
+        pillPaint.color = if (backgroundId != 0) {
+            context.getColor(backgroundId)
+        } else {
+            0xFFD3D9B7.toInt()
+        }
+
+        arrowPaint.color = if (arrowId != 0) {
+            context.getColor(arrowId)
+        } else {
+            0xFF3E4229.toInt()
+        }
+    }
+
+    private fun isNightMode(resources: android.content.res.Resources): Boolean {
+        return (resources.configuration.uiMode and
+            android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+            android.content.res.Configuration.UI_MODE_NIGHT_YES
+    }
 
     fun setRevealProgress(progress: Float) {
         revealProgress = progress.coerceIn(0f, 1f)
@@ -226,9 +268,14 @@ private class BackArrowView(
         val viewWidth = width.toFloat()
         val viewHeight = height.toFloat()
 
+        // AOSP 风格的展开曲线。
+        val widthProgress =
+            widthInterpolator.getInterpolation(revealProgress)
+
         val minWidth = viewHeight * 0.17f
+
         val currentWidth =
-            minWidth + (viewHeight - minWidth) * revealProgress
+            minWidth + (viewHeight - minWidth) * widthProgress
 
         val halfHeight = viewHeight / 2f
 
@@ -255,58 +302,52 @@ private class BackArrowView(
             pillPaint
         )
 
-        // 箭头在背景展开到一定程度后出现，
-        // 并始终位于当前背景的中心。
+        // 箭头在背景展开到约 23% 后开始出现。
         val arrowProgress =
-            ((revealProgress - 0.23f) / 0.77f).coerceIn(0f, 1f)
+            ((revealProgress - 0.23f) / 0.77f)
+                .coerceIn(0f, 1f)
 
         arrowPaint.alpha = (arrowProgress * 255f).toInt()
 
         if (arrowProgress > 0f) {
-            val arrowCenterX = if (fromLeftEdge) {
-                currentWidth / 2f
-            } else {
-                viewWidth - currentWidth / 2f
-            }
+            /*
+             * 无论从哪一侧触发，Back 指示器都保持 <。
+             * 这与当前 Pixel 上观察到的 AOSP 表现一致。
+             */
+            val arrowCenterX =
+                if (fromLeftEdge) {
+                    currentWidth / 2f
+                } else {
+                    viewWidth - currentWidth / 2f
+                }
 
             val arrowCenterY = viewHeight / 2f
 
             val arm = viewWidth * 0.13f
-            val tipOffset = arm * 0.7f
-            val tailOffset = arm * 0.7f
-            val vertical = arm * 1.4f
+            val tip = arrowCenterX - arm * 0.7f
+            val tail = arrowCenterX + arm * 0.7f
 
             val chevron = Path()
 
-            if (fromLeftEdge) {
-                chevron.moveTo(
-                    arrowCenterX + tailOffset,
-                    arrowCenterY - vertical
-                )
-                chevron.lineTo(
-                    arrowCenterX - tipOffset,
-                    arrowCenterY
-                )
-                chevron.lineTo(
-                    arrowCenterX + tailOffset,
-                    arrowCenterY + vertical
-                )
-            } else {
-                chevron.moveTo(
-                    arrowCenterX - tailOffset,
-                    arrowCenterY - vertical
-                )
-                chevron.lineTo(
-                    arrowCenterX + tipOffset,
-                    arrowCenterY
-                )
-                chevron.lineTo(
-                    arrowCenterX - tailOffset,
-                    arrowCenterY + vertical
-                )
-            }
+            chevron.moveTo(
+                tail,
+                arrowCenterY - arm * 1.4f
+            )
 
-            canvas.drawPath(chevron, arrowPaint)
+            chevron.lineTo(
+                tip,
+                arrowCenterY
+            )
+
+            chevron.lineTo(
+                tail,
+                arrowCenterY + arm * 1.4f
+            )
+
+            canvas.drawPath(
+                chevron,
+                arrowPaint
+            )
         }
     }
 }
