@@ -119,12 +119,19 @@ class BackIndicator(
         arrow.scaleY = 1f
         arrow.alpha = 1f
         anchorRawY = rawY
-        arrow.translationY = pillY(rawY)
+        
+        arrow.translationY = pillY(rawY).coerceIn(
+            0f,
+            (root.height - pillSizePx).coerceAtLeast(0f)
+        )
         applyProgress(0f)
     }
 
     fun onGestureProgress(distancePx: Float, rawY: Float) {
-        arrow.translationY = pillY(followedRawY(rawY))
+        arrow.translationY = pillY(followedRawY(rawY)).coerceIn(
+            0f,
+            (root.height - pillSizePx).coerceAtLeast(0f)
+        )
         applyProgress((distancePx / armDistancePx).coerceIn(0f, 1f))
     }
 
