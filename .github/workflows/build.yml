@@ -35,6 +35,7 @@ jobs:
             -storepass android
       - name: Show APK signing certificate
         run: |
-          APK=$(find . -type f -name "*.apk" | head -n 1)
+          APK=$(find app/build/outputs -type f -name "*.apk" | head -n 1)
           echo "Found APK: $APK"
-          keytool -printcert -jarfile "$APK"
+          "$ANDROID_HOME/build-tools/$(ls $ANDROID_HOME/build-tools | sort -V | tail -n 1)/apksigner" \
+            verify --print-certs "$APK"
