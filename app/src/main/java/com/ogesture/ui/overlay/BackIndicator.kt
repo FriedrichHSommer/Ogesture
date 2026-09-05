@@ -38,12 +38,15 @@ class BackIndicator(
     private val peekPx = (PEEK_DP * density)
 
     private val root = FrameLayout(context)
-    private val arrow = BackArrowView(context).apply {
+    // private val arrow = BackArrowView(context).apply {
+    private val arrow = View(context).apply {
         val size = pillSizePx.toInt()
         layoutParams = FrameLayout.LayoutParams(size, size).apply {
             gravity = (if (fromLeftEdge) Gravity.START else Gravity.END) or Gravity.TOP
         }
-        alpha = 0f
+        setBackgroundColor(0xFFFF0000.toInt())
+        alpha = 1f
+        // alpha = 0f
     }
     private var attached = false
     private var windowHidden = false
