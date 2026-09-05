@@ -58,7 +58,7 @@ class BackIndicator(
         if (attached) return
         val params = WindowManager.LayoutParams(
     (pillSizePx + peekPx).toInt(),
-    zoneLengthPx + 2 * (pillSizePx + peekPx).toInt(),
+    zoneLengthPx + 2 * pillSizePx.toInt(),
     WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
     WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
         WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
