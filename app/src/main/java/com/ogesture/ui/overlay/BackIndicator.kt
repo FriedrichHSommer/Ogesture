@@ -11,7 +11,6 @@ import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
-import android.animation.ValueAnimator
 
 /**
  * A gesture-navigation style back arrow that peeks out from a side edge while the user
@@ -212,9 +211,7 @@ private class BackArrowView(
     }
 
     private var revealProgress = 0f
-    private var targetRevealProgress = 0f
-    private var revealAnimator: ValueAnimator? = null
-
+    
     private val widthInterpolator =
         android.view.animation.PathInterpolator(
             0.19f, 1.27f,
@@ -264,48 +261,9 @@ private class BackArrowView(
     }
 
     fun setRevealProgress(progress: Float) {
-
-    targetRevealProgress = progress.coerceIn(0f, 1f)
-
-    if (targetRevealProgress <= revealProgress) {
-
-        revealProgress = targetRevealProgress
-
-        revealAnimator?.cancel()
-
+        revealProgress = progress.coerceIn(0f, 1f)
         invalidate()
-
-        return
-
     }
-
-    revealAnimator?.cancel()
-
-    revealAnimator = ValueAnimator.ofFloat(
-
-        revealProgress,
-
-        targetRevealProgress
-
-    ).apply {
-
-        duration = 150L
-
-        interpolator = android.view.animation.DecelerateInterpolator()
-
-        addUpdateListener {
-
-            revealProgress = it.animatedValue as Float
-
-            invalidate()
-
-        }
-
-        start()
-
-    }
-
-}
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
@@ -315,7 +273,9 @@ private class BackArrowView(
 
         // AOSP 风格的展开曲线。
         val widthProgress =
-            widthInterpolator.getInterpolation(revealProgress)
+        widthInterpolator.getInterpolation(
+            (revealProgress * 0.65f).coerceIn(0f, 1f)
+        )
 
         val minWidth = viewHeight * 0.17f
 
