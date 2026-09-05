@@ -64,14 +64,13 @@ class BackIndicator(
         WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
         WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
         WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-    PixelFormat.TRANSLUCENT,    
+    PixelFormat.TRANSLUCENT,
 ).apply {
     gravity =
         (if (fromLeftEdge) Gravity.START else Gravity.END) or
             Gravity.CENTER_VERTICAL
 
     x = edgeOffsetPx
-    alpha = 1f
 
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
         fitInsetsTypes = 0
@@ -175,6 +174,7 @@ class BackIndicator(
 
 /** A round dark pill with a left-pointing "back" chevron, whichever edge it comes from. */
 private class BackArrowView(context: Context) : View(context) {
+
     private val pillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
     color = 0xFFF2EFE9.toInt()
     style = Paint.Style.FILL
@@ -208,6 +208,6 @@ else
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         canvas.drawCircle(width / 2f, height / 2f, width / 2f, pillPaint)
-        canvas.drawPath(chevron, arrowPaint
+        canvas.drawPath(chevron, arrowPaint)
     }
 }
