@@ -41,7 +41,7 @@ class BackIndicator(
     private val arrow = BackArrowView(context).apply {
         val size = pillSizePx.toInt()
         layoutParams = FrameLayout.LayoutParams(size, size).apply {
-            gravity = (if (fromLeftEdge) Gravity.START else Gravity.END) or Gravity.CENTER_VERTICAL
+            gravity = (if (fromLeftEdge) Gravity.START else Gravity.END) or Gravity.TOP
         }
         alpha = 0f
     }
