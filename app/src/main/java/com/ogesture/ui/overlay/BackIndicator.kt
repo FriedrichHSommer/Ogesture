@@ -52,6 +52,8 @@ class BackIndicator(
 
     init {
         root.addView(arrow)
+
+        root.setBackgroundColor(0xFFFF0000.toInt())
     }
 
     override fun attach() {
