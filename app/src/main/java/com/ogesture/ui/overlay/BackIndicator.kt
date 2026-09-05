@@ -179,6 +179,10 @@ class BackIndicator(
 /** A round dark pill with a left-pointing "back" chevron, whichever edge it comes from. */
 private class BackArrowView(context: Context) : View(context) {
 
+    init {
+        setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+    }
+
     private val pillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
     color = 0xFFF2EFE9.toInt()
     style = Paint.Style.FILL
