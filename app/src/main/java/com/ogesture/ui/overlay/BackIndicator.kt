@@ -38,7 +38,7 @@ class BackIndicator(
     private val peekPx = (PEEK_DP * density)
 
     private val root = FrameLayout(context)
-    private val arrow = BackArrowView(context).apply {
+    private val arrow = BackArrowView(context, fromLeftEdge).apply {
         val size = pillSizePx.toInt()
         layoutParams = FrameLayout.LayoutParams(size, size).apply {
             gravity = (if (fromLeftEdge) Gravity.START else Gravity.END) or Gravity.TOP
@@ -163,10 +163,12 @@ class BackIndicator(
     }
 
     /** 0 = fully hidden behind the edge, 1 = fully peeked out. */
-    private fun applyProgress(fraction: Float) {
+    private fun applyProgress(fraction: Float) 
+    {
         val hidden = if (fromLeftEdge) -pillSizePx else pillSizePx
         val shown = if (fromLeftEdge) peekPx else -peekPx
-        arrow.translationX = hidden + (shown - hidden) * fraction
+        arrow.translationX = hidden + (shown - hidden) * fraction   
+        arrow.setRevealProgress(fraction)
     }
 
     private companion object {
@@ -180,8 +182,10 @@ class BackIndicator(
 }
 
 /** A round dark pill with a left-pointing "back" chevron, whichever edge it comes from. */
-private class BackArrowView(context: Context) : View(context) {
-
+private class BackArrowView(
+    context: Context,
+    private val fromLeftEdge: Boolean
+) : View(context) {
     private val pillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
     color = 0xFFF2EFE9.toInt()
     style = Paint.Style.FILL
@@ -198,7 +202,12 @@ else
         strokeJoin = Paint.Join.ROUND
     }
     private val chevron = Path()
-
+    private var revealProgress = 0f
+    fun setRevealProgress(progress: Float)
+    {
+        revealProgress = progress.coerceIn(0f, 1f)
+        invalidate()
+    }
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         val cx = w / 2f
@@ -213,8 +222,57 @@ else
     }
 
     override fun onDraw(canvas: Canvas) {
-        super.onDraw(canvas)
-        canvas.drawCircle(width / 2f, height / 2f, width / 2f, pillPaint)
-        canvas.drawPath(chevron, arrowPaint)
+    super.onDraw(canvas)
+
+    val fullSize = width.toFloat()
+    val viewHeight = height.toFloat()
+
+    val minWidth = fullSize * 0.25f
+    val currentWidth =
+        minWidth + (fullSize - minWidth) * revealProgress
+
+    val farRadius = viewHeight / 2f
+    val edgeRadius = (viewHeight / 2f) * revealProgress
+
+    val rect = if (fromLeftEdge) {
+        android.graphics.RectF(
+            0f,
+            0f,
+            currentWidth,
+            viewHeight
+        )
+    } else {
+        android.graphics.RectF(
+            fullSize - currentWidth,
+            0f,
+            fullSize,
+            viewHeight
+        )
+    }
+
+    val radii = if (fromLeftEdge) {
+        floatArrayOf(
+            edgeRadius, edgeRadius,
+            farRadius, farRadius,
+            farRadius, farRadius,
+            edgeRadius, edgeRadius
+        )
+    } else {
+        floatArrayOf(
+            farRadius, farRadius,
+            edgeRadius, edgeRadius,
+            edgeRadius, edgeRadius,
+            farRadius, farRadius
+        )
+    }
+
+    val backgroundPath = Path()
+    backgroundPath.addRoundRect(
+        rect,
+        radii,
+        Path.Direction.CW
+    )
+    canvas.drawPath(backgroundPath, pillPaint)
+    canvas.drawPath(chevron, arrowPaint)
     }
 }
