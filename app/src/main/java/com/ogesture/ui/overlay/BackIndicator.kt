@@ -192,93 +192,121 @@ private class BackArrowView(
     context: Context,
     private val fromLeftEdge: Boolean
 ) : View(context) {
+
+    private val density = context.resources.displayMetrics.density
+
     private val pillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-    color = 0xFFF2EFE9.toInt()
-    style = Paint.Style.FILL
-    alpha = 255
-}
+        color = 0xFFF2EFE9.toInt()
+        style = Paint.Style.FILL
+        alpha = 255
+    }
+
     private val arrowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = if (Build.VERSION.SDK_INT >= 31)
-    context.getColor(android.R.color.system_accent1_700)
-else
-    0xFFFFFFFF.toInt()
+        color = if (Build.VERSION.SDK_INT >= 31) {
+            context.getColor(android.R.color.system_accent1_700)
+        } else {
+            0xFFFFFFFF.toInt()
+        }
         style = Paint.Style.STROKE
-        strokeWidth = 3.0f * context.resources.displayMetrics.density
+        strokeWidth = 3.0f * density
         strokeCap = Paint.Cap.ROUND
         strokeJoin = Paint.Join.ROUND
     }
-    private val chevron = Path()
+
     private var revealProgress = 0f
-    fun setRevealProgress(progress: Float)
-    {
+
+    fun setRevealProgress(progress: Float) {
         revealProgress = progress.coerceIn(0f, 1f)
         invalidate()
     }
-    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
-        super.onSizeChanged(w, h, oldw, oldh)
-        val cx = w / 2f
-        val cy = h / 2f
-        val arm = w * 0.13f
-        val tip = cx - arm * 0.7f
-        val tail = cx + arm * 0.7f
-        chevron.reset()
-        chevron.moveTo(tail, cy - arm * 1.4f)
-        chevron.lineTo(tip, cy)
-        chevron.lineTo(tail, cy + arm * 1.4f)
-    }
 
     override fun onDraw(canvas: Canvas) {
-    super.onDraw(canvas)
+        super.onDraw(canvas)
 
-    val fullSize = width.toFloat()
-    val viewHeight = height.toFloat()
+        val viewWidth = width.toFloat()
+        val viewHeight = height.toFloat()
 
-    val minWidth = fullSize * 0.25f
-    val currentWidth =
-        minWidth + (fullSize - minWidth) * revealProgress
+        val minWidth = viewHeight * 0.17f
+        val currentWidth =
+            minWidth + (viewHeight - minWidth) * revealProgress
 
-    val farRadius = viewHeight / 2f
-    val edgeRadius = (viewHeight / 2f) * revealProgress
+        val halfHeight = viewHeight / 2f
 
-    val rect = if (fromLeftEdge) {
-        android.graphics.RectF(
-            0f,
-            0f,
-            currentWidth,
-            viewHeight
+        val rect = if (fromLeftEdge) {
+            android.graphics.RectF(
+                0f,
+                0f,
+                currentWidth,
+                viewHeight
+            )
+        } else {
+            android.graphics.RectF(
+                viewWidth - currentWidth,
+                0f,
+                viewWidth,
+                viewHeight
+            )
+        }
+
+        canvas.drawRoundRect(
+            rect,
+            halfHeight,
+            halfHeight,
+            pillPaint
         )
-    } else {
-        android.graphics.RectF(
-            fullSize - currentWidth,
-            0f,
-            fullSize,
-            viewHeight
-        )
-    }
 
-    val radii = if (fromLeftEdge) {
-        floatArrayOf(
-            edgeRadius, edgeRadius,
-            farRadius, farRadius,
-            farRadius, farRadius,
-            edgeRadius, edgeRadius
-        )
-    } else {
-        floatArrayOf(
-            farRadius, farRadius,
-            edgeRadius, edgeRadius,
-            edgeRadius, edgeRadius,
-            farRadius, farRadius
-        )
-    }
+        // 箭头在背景展开到一定程度后出现，
+        // 并始终位于当前背景的中心。
+        val arrowProgress =
+            ((revealProgress - 0.23f) / 0.77f).coerceIn(0f, 1f)
 
-    val backgroundPath = Path()
-    backgroundPath.addRoundRect(
-        rect,
-        radii,
-        Path.Direction.CW
-    )
-    canvas.drawPath(backgroundPath, pillPaint)
-    canvas.drawPath(chevron, arrowPaint)
+        arrowPaint.alpha = (arrowProgress * 255f).toInt()
+
+        if (arrowProgress > 0f) {
+            val arrowCenterX = if (fromLeftEdge) {
+                currentWidth / 2f
+            } else {
+                viewWidth - currentWidth / 2f
+            }
+
+            val arrowCenterY = viewHeight / 2f
+
+            val arm = viewWidth * 0.13f
+            val tipOffset = arm * 0.7f
+            val tailOffset = arm * 0.7f
+            val vertical = arm * 1.4f
+
+            val chevron = Path()
+
+            if (fromLeftEdge) {
+                chevron.moveTo(
+                    arrowCenterX + tailOffset,
+                    arrowCenterY - vertical
+                )
+                chevron.lineTo(
+                    arrowCenterX - tipOffset,
+                    arrowCenterY
+                )
+                chevron.lineTo(
+                    arrowCenterX + tailOffset,
+                    arrowCenterY + vertical
+                )
+            } else {
+                chevron.moveTo(
+                    arrowCenterX - tailOffset,
+                    arrowCenterY - vertical
+                )
+                chevron.lineTo(
+                    arrowCenterX + tipOffset,
+                    arrowCenterY
+                )
+                chevron.lineTo(
+                    arrowCenterX - tailOffset,
+                    arrowCenterY + vertical
+                )
+            }
+
+            canvas.drawPath(chevron, arrowPaint)
+        }
     }
 }
