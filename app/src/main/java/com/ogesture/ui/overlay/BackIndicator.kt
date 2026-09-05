@@ -43,7 +43,6 @@ class BackIndicator(
         layoutParams = FrameLayout.LayoutParams(size, size).apply {
             gravity = (if (fromLeftEdge) Gravity.START else Gravity.END) or Gravity.TOP
         }
-        setBackgroundColor(0xFFFF0000.toInt())
         alpha = 0f
     }
     private var attached = false
@@ -53,8 +52,6 @@ class BackIndicator(
 
     init {
         root.addView(arrow)
-
-        root.setBackgroundColor(0xFFFF0000.toInt())
     }
 
     override fun attach() {
