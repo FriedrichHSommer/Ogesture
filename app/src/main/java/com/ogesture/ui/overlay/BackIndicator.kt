@@ -11,6 +11,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
+import android.animation.ValueAnimator
 
 /**
  * A gesture-navigation style back arrow that peeks out from a side edge while the user
@@ -211,6 +212,8 @@ private class BackArrowView(
     }
 
     private var revealProgress = 0f
+    private var targetRevealProgress = 0f
+    private var revealAnimator: ValueAnimator? = null
 
     private val widthInterpolator =
         android.view.animation.PathInterpolator(
@@ -261,9 +264,48 @@ private class BackArrowView(
     }
 
     fun setRevealProgress(progress: Float) {
-        revealProgress = progress.coerceIn(0f, 1f)
+
+    targetRevealProgress = progress.coerceIn(0f, 1f)
+
+    if (targetRevealProgress <= revealProgress) {
+
+        revealProgress = targetRevealProgress
+
+        revealAnimator?.cancel()
+
         invalidate()
+
+        return
+
     }
+
+    revealAnimator?.cancel()
+
+    revealAnimator = ValueAnimator.ofFloat(
+
+        revealProgress,
+
+        targetRevealProgress
+
+    ).apply {
+
+        duration = 150L
+
+        interpolator = android.view.animation.DecelerateInterpolator()
+
+        addUpdateListener {
+
+            revealProgress = it.animatedValue as Float
+
+            invalidate()
+
+        }
+
+        start()
+
+    }
+
+}
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
