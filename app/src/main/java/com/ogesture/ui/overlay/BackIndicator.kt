@@ -254,33 +254,49 @@ fun onGestureStart(rawY: Float) {
             )
 
 when (currentState) {
-    GestureState.ENTRY -> {
-        val gestureProgress =
-            (distancePx / armDistancePx)
-                .coerceIn(0f, 1f)
 
-        val horizontalProgress =
-            RUBBER_BAND_INTERPOLATOR.getInterpolation(
-                gestureProgress
-            )
+GestureState.ENTRY -> {
+    /*
+     * Reserve the beginning of the armed gesture for the visible
+     * compressed-square -> full-square expansion.
+     *
+     * The progress is re-normalized so the first visible ENTRY frame
+     * starts from 0 instead of inheriting an already-large gesture
+     * progress.
+     */
+    val rawProgress =
+        (distancePx / armDistancePx)
+            .coerceIn(0f, 1f)
 
-val squareProgress =
-    gestureProgress
-        .coerceIn(0f, 1f)
+    val entryStart = 0.10f
 
-        val arrowProgress =
-            RUBBER_BAND_INTERPOLATOR.getInterpolation(
-                gestureProgress
-            )
+    val entryProgress =
+        ((rawProgress - entryStart) / (1f - entryStart))
+            .coerceIn(0f, 1f)
 
-        panel.setVisualState(
-            horizontalProgress = horizontalProgress,
-            backgroundProgress = squareProgress,
-            arrowProgress = arrowProgress,
+    val horizontalProgress =
+        RUBBER_BAND_INTERPOLATOR.getInterpolation(
+            entryProgress
         )
 
-        panel.setShapeProgress(0f)
-    }
+    /*
+     * Keep width expansion linear enough to remain visually observable.
+     */
+    val squareProgress = entryProgress
+
+    val arrowProgress =
+        RUBBER_BAND_INTERPOLATOR.getInterpolation(
+            entryProgress
+        )
+
+    panel.setVisualState(
+        horizontalProgress = horizontalProgress,
+        backgroundProgress = squareProgress,
+        arrowProgress = arrowProgress,
+    )
+
+    panel.setShapeProgress(0f)
+}
 
 GestureState.ACTIVE -> {
     panel.setActiveGestureState()
@@ -641,7 +657,7 @@ private val compressedWidth =
  */
 
 private val edgeMargin =
-    0f
+    8f
 
 /*
  * Position of the fully expanded 48x48 rounded square.
@@ -846,7 +862,7 @@ private val circleAdditionalInset =
  *
  * Therefore the View itself must NOT translate during ENTRY.
  */
-horizontalTranslation.snapTo(0f)
+horizontalTranslation.snapTo(edgeMargin)
 
         arrowLength.snapTo(0f)
         arrowHeight.snapTo(0f)
@@ -1293,7 +1309,7 @@ arrowHeight.snapTo(
  *
  * Do not move it inward yet.
  */
-horizontalTranslation.snapTo(0f)
+horizontalTranslation.snapTo(edgeMargin)
 
 arrowLength.snapTo(
     fullSize * 0.20f
@@ -1424,7 +1440,7 @@ arrowHeight.snapTo(
  * Start exactly from the same anchored position as the
  * fully expanded rounded square.
  */
-horizontalTranslation.snapTo(0f)
+horizontalTranslation.snapTo(edgeMargin)
 
 /*
  * Only now does the entire 48x48 shape move inward.
