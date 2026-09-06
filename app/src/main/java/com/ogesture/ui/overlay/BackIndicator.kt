@@ -278,18 +278,13 @@ when (currentState) {
         panel.setShapeProgress(0f)
     }
 
-    GestureState.ACTIVE -> {
-        /*
-         * ACTIVE 后保持当前已经实现好的圆形。
-         */
-        panel.setVisualState(
-            horizontalProgress = 1f,
-            backgroundProgress = 1f,
-            arrowProgress = 1f,
-        )
-
-        panel.setShapeProgress(1f)
-    }
+GestureState.ACTIVE -> {
+    panel.setVisualState(
+        horizontalProgress = 1f,
+        backgroundProgress = 1f,
+        arrowProgress = 1f,
+    )
+}
 
     GestureState.INACTIVE -> {
         val gestureProgress =
@@ -608,6 +603,7 @@ private var shapeProgress = 0f
 private var jumpOffset = 0f
 
     private var jumpAnimator: ValueAnimator? = null
+    private var shapeAnimator: ValueAnimator? = null
 
     private val propertyInterpolator =
         PathInterpolator(
@@ -680,6 +676,8 @@ private var jumpOffset = 0f
 
 fun resetForGesture() {
     jumpAnimator?.cancel()
+    shapeAnimator?.cancel()
+
     animatedHorizontal.cancel()
     animatedBackground.cancel()
     animatedArrow.cancel()
@@ -726,7 +724,14 @@ fun deactivate(
     compressedBackgroundProgress: Float,
 ) {
     jumpAnimator?.cancel()
+    shapeAnimator?.cancel()
 
+    /*
+     * 取消 ACTIVE 时，不经过“完整方形”。
+     *
+     * 直接：
+     * 圆形 → 压缩圆角方形 → 向边缘弹出
+     */
     shapeProgress = 0f
 
     backgroundProgress =
@@ -750,6 +755,20 @@ fun deactivate(
                 invalidate()
             }
 
+            addListener(
+                object : AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(
+                        animation: Animator,
+                    ) {
+                        if (animation.isCanceled) return
+
+                        jumpOffset = 0f
+                        updateHorizontalTranslation()
+                        invalidate()
+                    }
+                }
+            )
+
             start()
         }
 
@@ -761,9 +780,22 @@ fun activate(
     onActivated: (() -> Unit)? = null,
 ) {
     jumpAnimator?.cancel()
+    shapeAnimator?.cancel()
 
+    /*
+     * ACTIVE 的第一帧必须仍然是“完整的圆角方形”。
+     *
+     * backgroundProgress = 1:
+     *     背景已经完全展开。
+     *
+     * shapeProgress = 0:
+     *     仍然保持圆角方形。
+     *
+     * 先弹，再变圆。
+     */
     backgroundProgress = 1f
-    shapeProgress = 1f
+    shapeProgress = 0f
+    jumpOffset = 0f
 
     performHapticFeedback(
         HapticFeedbackConstants.CONFIRM
@@ -786,6 +818,36 @@ fun activate(
                 updateHorizontalTranslation()
                 invalidate()
             }
+
+            addListener(
+                object : AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(
+                        animation: Animator,
+                    ) {
+                        if (animation.isCanceled) return
+
+                        jumpOffset = 0f
+
+                        shapeAnimator =
+                            ValueAnimator.ofFloat(
+                                0f,
+                                1f,
+                            ).apply {
+                                duration = 90L
+                                interpolator =
+                                    DecelerateInterpolator()
+
+                                addUpdateListener {
+                                    shapeProgress =
+                                        it.animatedValue as Float
+                                    invalidate()
+                                }
+
+                                start()
+                            }
+                    }
+                }
+            )
 
             start()
         }
