@@ -455,10 +455,10 @@ class BackIndicator(
         const val RUBBER_BAND_AMOUNT = 15f
 
         const val MIN_FLING_VELOCITY = 3000f
-        const val FLING_MIN_APPEARANCE_DURATION = 235L
+        const val FLING_MIN_APPEARANCE_DURATION = 320L
 
-        const val COMMIT_DURATION = 120L
-        const val CANCEL_DURATION = 180L
+        const val COMMIT_DURATION = 180L
+        const val CANCEL_DURATION = 220L
 
         val RUBBER_BAND_INTERPOLATOR =
             PathInterpolator(
