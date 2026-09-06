@@ -17,6 +17,9 @@ import android.view.animation.PathInterpolator
 import android.widget.FrameLayout
 import kotlin.math.abs
 import kotlin.math.sign
+import android.view.HapticFeedbackConstants
+import kotlin.math.sin
+import kotlin.math.PI
 
 /**
  * Edge-back indicator for Ogesture.
@@ -505,6 +508,9 @@ private class BackArrowView(
     private var backgroundProgress = 0f
     private var arrowProgress = 0f
 
+    private var squareReached = false
+    private var snapProgress = 0f
+
     private val propertyInterpolator =
         PathInterpolator(
             0.19f,
@@ -577,9 +583,10 @@ private class BackArrowView(
     fun setVisualState(
         horizontalProgress: Float,
         backgroundProgress: Float,
+    
         arrowProgress: Float,
+        
     ) {
-
         this.horizontalProgress =
             horizontalProgress.coerceIn(0f, 1f)
 
@@ -588,6 +595,33 @@ private class BackArrowView(
 
         this.arrowProgress =
             arrowProgress.coerceIn(0f, 1f)
+
+    /*
+     * 第一阶段：
+     * 压扁的圆角矩形展开。
+     *
+     * 当达到接近正方形的位置时，进入第二阶段：
+     * 向屏幕内部轻微跳一下，同时开始变圆。
+     */
+        snapProgress =
+            ((this.backgroundProgress - SQUARE_THRESHOLD) /
+                (1f - SQUARE_THRESHOLD))
+                .coerceIn(0f, 1f)
+
+        if (
+            this.backgroundProgress >= SQUARE_THRESHOLD &&
+            !squareReached
+        ) {
+            squareReached = true
+
+            performHapticFeedback(
+                HapticFeedbackConstants.CONFIRM
+            )
+        }
+
+        if (this.backgroundProgress < SQUARE_THRESHOLD) {
+            squareReached = false
+        }
 
         updateHorizontalTranslation()
 
@@ -694,25 +728,45 @@ private class BackArrowView(
     }
 
     private fun updateHorizontalTranslation() {
-
+    
         val edgeMargin =
             4f * density
 
         val activeMargin =
             14f * density
 
+    /*
+     * 正常的向内移动。
+     */
+        val normalTranslation =
+            edgeMargin +
+                (activeMargin - edgeMargin) *
+                horizontalProgress
+
+    /*
+     * 达到正方形后额外“跳”向屏幕内部。
+     *
+     * sin 曲线意味着：
+     *
+     * 0 → 跳进去 → 回到正常位置
+     *
+     * 而不是永久多移动一段距离。
+     */
+        val jumpDistance =
+            5f * density
+
+        val jump =
+            sin(snapProgress * PI).toFloat() *
+                jumpDistance
+
         translationX =
             if (fromLeftEdge) {
 
-                edgeMargin +
-                    (activeMargin - edgeMargin) *
-                    horizontalProgress
+                normalTranslation + jump
 
             } else {
 
-                -edgeMargin -
-                    (activeMargin - edgeMargin) *
-                    horizontalProgress
+                -(normalTranslation + jump)
             }
     }
 
@@ -732,11 +786,12 @@ private class BackArrowView(
         // Background
         // --------------------------------------------------------------------
 
+        val shapeProgress =
+            (backgroundProgress / SQUARE_THRESHOLD)
+                .coerceIn(0f, 1f)
+
         val widthProgress =
-            propertyInterpolator.getInterpolation(
-                (backgroundProgress * 0.65f)
-                    .coerceIn(0f, 1f)
-            )
+            propertyInterpolator.getInterpolation(shapeProgress)
                 .coerceIn(0f, 1f)
 
         /*
@@ -762,10 +817,15 @@ private class BackArrowView(
         val minHeight =
             viewHeight * 0.78f
 
+        /*
+         * 第一阶段只负责展开到正方形。
+         *
+         * 到达正方形以后，高度不再变化。
+         */
         val currentHeight =
             minHeight +
                 (viewHeight - minHeight) *
-                backgroundProgress
+                shapeProgress
 
         val top =
             (viewHeight - currentHeight) / 2f
@@ -800,15 +860,26 @@ private class BackArrowView(
          * round-rect radius.
          */
 
-        val edgeRadius =
+        /*
+         * 第一阶段保持“圆角正方形”的感觉。
+         *
+         * 第二阶段（snapProgress）才逐渐把四个角变成完整圆形。
+         */
+        val squareCornerRadius =
+            currentHeight * 0.32f
+
+        val circleCornerRadius =
             currentHeight / 2f
 
+        val edgeRadius =
+            squareCornerRadius +
+                (circleCornerRadius - squareCornerRadius) *
+                snapProgress
+
         val farRadius =
-            currentHeight *
-                (
-                    0.32f +
-                        0.18f * backgroundProgress
-                    )
+            squareCornerRadius +
+                (circleCornerRadius - squareCornerRadius) *
+                snapProgress
 
         val radii =
             if (fromLeftEdge) {
@@ -915,5 +986,8 @@ private class BackArrowView(
             chevron,
             arrowPaint,
         )
+    }
+    private companion object {
+        const val SQUARE_THRESHOLD = 0.72f
     }
 }
