@@ -18,8 +18,6 @@ import android.widget.FrameLayout
 import kotlin.math.abs
 import kotlin.math.sign
 import android.view.HapticFeedbackConstants
-import kotlin.math.sin
-import kotlin.math.PI
 
 /**
  * Edge-back indicator for Ogesture.
@@ -229,10 +227,15 @@ class BackIndicator(
                 gestureProgress
             )
 
-        val backgroundProgress =
-            DECELERATE_INTERPOLATOR.getInterpolation(
-                gestureProgress
-            )
+        /*
+         * 第一阶段只使用前 62% 的手势距离。
+         *
+         * 到达圆角正方形以后保持在那里，
+         * 不会因为继续慢慢拉就偷偷变圆。
+         */
+        val squareProgress =
+            (gestureProgress / 0.62f)
+                .coerceIn(0f, 1f)
 
         val arrowProgress =
             RUBBER_BAND_INTERPOLATOR.getInterpolation(
@@ -241,7 +244,7 @@ class BackIndicator(
 
         panel.setVisualState(
             horizontalProgress = horizontalProgress,
-            backgroundProgress = backgroundProgress,
+            backgroundProgress = squareProgress,
             arrowProgress = arrowProgress,
         )
     }
@@ -254,6 +257,8 @@ class BackIndicator(
             backgroundProgress = 1f,
             arrowProgress = 1f,
         )
+
+        panel.activate()
     }
 
     fun onGestureEnd(fired: Boolean) {
@@ -508,8 +513,8 @@ private class BackArrowView(
     private var backgroundProgress = 0f
     private var arrowProgress = 0f
 
-    private var squareReached = false
-    private var snapProgress = 0f
+    private var active = false
+    private var jumpOffset = 0f
 
     private val propertyInterpolator =
         PathInterpolator(
@@ -596,34 +601,38 @@ private class BackArrowView(
         this.arrowProgress =
             arrowProgress.coerceIn(0f, 1f)
 
-    /*
-     * 第一阶段：
-     * 压扁的圆角矩形展开。
-     *
-     * 当达到接近正方形的位置时，进入第二阶段：
-     * 向屏幕内部轻微跳一下，同时开始变圆。
-     */
-        snapProgress =
-            ((this.backgroundProgress - SQUARE_THRESHOLD) /
-                (1f - SQUARE_THRESHOLD))
-                .coerceIn(0f, 1f)
-
-        if (
-            this.backgroundProgress >= SQUARE_THRESHOLD &&
-            !squareReached
-        ) {
-            squareReached = true
-
-            performHapticFeedback(
-                HapticFeedbackConstants.CONFIRM
-            )
-        }
-
-        if (this.backgroundProgress < SQUARE_THRESHOLD) {
-            squareReached = false
-        }
-
         updateHorizontalTranslation()
+
+        invalidate()
+    }
+
+    fun activate() {
+        if (active) return
+
+        active = true
+
+        performHapticFeedback(
+            HapticFeedbackConstants.CONFIRM
+        )
+
+        android.animation.ValueAnimator
+            .ofFloat(0f, 1f, 0f)
+            .apply {
+                duration = 120L
+
+                interpolator =
+                    DecelerateInterpolator()
+
+                addUpdateListener {
+                    jumpOffset =
+                        (it.animatedValue as Float) *
+                            5f * density
+
+                    updateHorizontalTranslation()
+                }
+
+                start()
+            }
 
         invalidate()
     }
@@ -728,45 +737,23 @@ private class BackArrowView(
     }
 
     private fun updateHorizontalTranslation() {
-    
+
         val edgeMargin =
             4f * density
 
         val activeMargin =
             14f * density
 
-    /*
-     * 正常的向内移动。
-     */
         val normalTranslation =
             edgeMargin +
                 (activeMargin - edgeMargin) *
                 horizontalProgress
 
-    /*
-     * 达到正方形后额外“跳”向屏幕内部。
-     *
-     * sin 曲线意味着：
-     *
-     * 0 → 跳进去 → 回到正常位置
-     *
-     * 而不是永久多移动一段距离。
-     */
-        val jumpDistance =
-            5f * density
-
-        val jump =
-            sin(snapProgress * PI).toFloat() *
-                jumpDistance
-
         translationX =
             if (fromLeftEdge) {
-
-                normalTranslation + jump
-
+                normalTranslation + jumpOffset
             } else {
-
-                -(normalTranslation + jump)
+                -(normalTranslation + jumpOffset)
             }
     }
 
@@ -871,15 +858,18 @@ private class BackArrowView(
         val circleCornerRadius =
             currentHeight / 2f
 
+        val cornerRadius =
+            if (active) {
+                circleCornerRadius
+            } else {
+                squareCornerRadius
+            }
+
         val edgeRadius =
-            squareCornerRadius +
-                (circleCornerRadius - squareCornerRadius) *
-                snapProgress
+            cornerRadius
 
         val farRadius =
-            squareCornerRadius +
-                (circleCornerRadius - squareCornerRadius) *
-                snapProgress
+            cornerRadius
 
         val radii =
             if (fromLeftEdge) {
@@ -986,8 +976,5 @@ private class BackArrowView(
             chevron,
             arrowPaint,
         )
-    }
-    private companion object {
-        const val SQUARE_THRESHOLD = 0.72f
     }
 }
