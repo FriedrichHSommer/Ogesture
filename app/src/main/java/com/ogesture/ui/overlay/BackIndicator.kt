@@ -756,14 +756,12 @@ fun deactivate(
             }
 
             addListener(
-                object : AnimatorListenerAdapter() {
-                    override fun onAnimationEnd(
+                object : AnimatorListenerAdapter() {                
+                    override fun onAnimationEnd(    
                         animation: Animator,
-                    ) {
-                        if (animation.isCanceled) return
-
-                        jumpOffset = 0f
-                        updateHorizontalTranslation()
+                    ) {    
+                        jumpOffset = 0f    
+                        updateHorizontalTranslation()    
                         invalidate()
                     }
                 }
@@ -824,8 +822,6 @@ fun activate(
                     override fun onAnimationEnd(
                         animation: Animator,
                     ) {
-                        if (animation.isCanceled) return
-
                         jumpOffset = 0f
 
                         shapeAnimator =
