@@ -249,25 +249,75 @@ fun onGestureStart(rawY: Float) {
                 rubberBandPanelY(rawY)
             )
 
-        when (currentState) {
-            GestureState.ENTRY -> {
-                val gestureProgress =
-                    (distancePx / armDistancePx)
-                        .coerceIn(0f, 1f)
+when (currentState) {
+    GestureState.ENTRY -> {
+        val gestureProgress =
+            (distancePx / armDistancePx)
+                .coerceIn(0f, 1f)
 
-                val horizontalProgress =
-                    RUBBER_BAND_INTERPOLATOR.getInterpolation(
-                        gestureProgress
-                    )
+        val horizontalProgress =
+            RUBBER_BAND_INTERPOLATOR.getInterpolation(
+                gestureProgress
+            )
 
-                val squareProgress =
-                    (gestureProgress / 0.62f)
-                        .coerceIn(0f, 1f)
+        val squareProgress =
+            (gestureProgress / 0.62f)
+                .coerceIn(0f, 1f)
 
-                val arrowProgress =
-                    RUBBER_BAND_INTERPOLATOR.getInterpolation(
-                        gestureProgress
-                    )
+        val arrowProgress =
+            RUBBER_BAND_INTERPOLATOR.getInterpolation(
+                gestureProgress
+            )
+
+        panel.setVisualState(
+            horizontalProgress = horizontalProgress,
+            backgroundProgress = squareProgress,
+            arrowProgress = arrowProgress,
+        )
+
+        panel.setShapeProgress(0f)
+    }
+
+    GestureState.ACTIVE -> {
+        /*
+         * ACTIVE 后保持当前已经实现好的圆形。
+         */
+        panel.setVisualState(
+            horizontalProgress = 1f,
+            backgroundProgress = 1f,
+            arrowProgress = 1f,
+        )
+
+        panel.setShapeProgress(1f)
+    }
+
+    GestureState.INACTIVE -> {
+        val gestureProgress =
+            (distancePx / armDistancePx)
+                .coerceIn(0f, 1f)
+
+        val progress =
+            (gestureProgress / 0.62f)
+                .coerceIn(0f, 1f)
+
+        panel.setVisualState(
+            horizontalProgress =
+                RUBBER_BAND_INTERPOLATOR
+                    .getInterpolation(gestureProgress),
+
+            backgroundProgress = progress,
+
+            arrowProgress =
+                RUBBER_BAND_INTERPOLATOR
+                    .getInterpolation(gestureProgress),
+        )
+
+        panel.setShapeProgress(0f)
+    }
+
+    else -> {
+    }
+}
 
 private fun deactivate(
     distancePx: Float,
@@ -288,59 +338,6 @@ private fun deactivate(
         compressedBackgroundProgress
     )
 }
-                    
-panel.setVisualState(
-    horizontalProgress = horizontalProgress,
-    backgroundProgress = squareProgress,
-    arrowProgress = arrowProgress,
-)
-
-panel.setShapeProgress(0f)
-            }
-
-            GestureState.ACTIVE -> {
-                /*
-                 * ACTIVE 后保持当前已经实现好的圆形。
-                 *
-                 * 这里暂时不重新设计后续 stretch，
-                 * 先把 AOSP 的状态切换机制做正确。
-                 */
-                panel.setVisualState(
-                    horizontalProgress = 1f,
-                    backgroundProgress = 1f,
-                    arrowProgress = 1f,
-                )
-                panel.setShapeProgress(1f)
-            }
-            
-
-GestureState.INACTIVE -> {
-    val gestureProgress =
-        (distancePx / armDistancePx)
-            .coerceIn(0f, 1f)
-
-    val progress =
-        (gestureProgress / 0.62f)
-            .coerceIn(0f, 1f)
-
-    panel.setVisualState(
-        horizontalProgress =
-            RUBBER_BAND_INTERPOLATOR
-                .getInterpolation(gestureProgress),
-
-        backgroundProgress = progress,
-
-        arrowProgress =
-            RUBBER_BAND_INTERPOLATOR
-                .getInterpolation(gestureProgress),
-    )
-
-    panel.setShapeProgress(0f)
-}
-
-            else -> {
-            }
-        }
     }
    
     fun onArmed() {
