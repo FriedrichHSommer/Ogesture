@@ -338,9 +338,8 @@ private fun deactivate(
         compressedBackgroundProgress
     )
 }
-    }
-   
-    fun onArmed() {
+
+fun onArmed() {
         if (currentState == GestureState.ACTIVE) return
 
         totalTouchDeltaPx = 0f
