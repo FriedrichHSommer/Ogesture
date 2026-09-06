@@ -833,9 +833,20 @@ private val circleAdditionalInset =
             fullSize / 2f
         )
 
-        horizontalTranslation.snapTo(
-            edgeMargin
-        )
+/*
+ * ENTRY geometry:
+ *
+ * The background expands away from the screen edge.
+ *
+ * LEFT:
+ *   left edge stays fixed, right edge grows inward.
+ *
+ * RIGHT:
+ *   right edge stays fixed, left edge grows inward.
+ *
+ * Therefore the View itself must NOT translate during ENTRY.
+ */
+horizontalTranslation.snapTo(0f)
 
         arrowLength.snapTo(0f)
         arrowHeight.snapTo(0f)
@@ -1276,9 +1287,13 @@ arrowHeight.snapTo(
 
         scale.snapTo(1f)
 
-        horizontalTranslation.snapTo(
-            activeMargin
-        )
+/*
+ * The fully expanded 48x48 rounded square must remain at the
+ * same screen-edge anchor as the ENTRY shape.
+ *
+ * Do not move it inward yet.
+ */
+horizontalTranslation.snapTo(0f)
 
 arrowLength.snapTo(
     fullSize * 0.20f
@@ -1405,18 +1420,21 @@ arrowHeight.snapTo(
         /*
          * Start from the ACTIVE rounded-square position.
          */
-        horizontalTranslation.snapTo(
-            activeMargin
-        )
+/*
+ * Start exactly from the same anchored position as the
+ * fully expanded rounded square.
+ */
+horizontalTranslation.snapTo(0f)
 
-        /*
-         * The final circle is closer to the center.
-         */
-        horizontalTranslation.updateRestingPosition(
-            activeMargin +
-                circleAdditionalInset,
-            animated = true,
-        )
+/*
+ * Only now does the entire 48x48 shape move inward.
+ *
+ * This is the visible "pop/jump toward the center" phase.
+ */
+horizontalTranslation.updateRestingPosition(
+    circleAdditionalInset,
+    animated = true,
+)
 
         postDelayed(
             {
