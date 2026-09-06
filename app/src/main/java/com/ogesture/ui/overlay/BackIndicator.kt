@@ -604,8 +604,8 @@ private class BackArrowView(
     private val fullSize =
         48f * density
 
-    private val compressedWidth =
-        0f
+private val compressedWidth =
+    fullSize * 0.25f
 
     private val compressedHeight =
         fullSize
@@ -988,20 +988,6 @@ private val circleAdditionalInset =
             }
         }
 
-fun stretchBy(
-    finalPosition: Float,
-    amount: Float,
-) {
-    val stretchedAmount =
-        amount * (
-            finalPosition - restingPosition
-        )
-
-    animation.animateToFinalPosition(
-        restingPosition + stretchedAmount
-    )
-}
-
         fun cancel() {
             animation.cancel()
         }
@@ -1118,8 +1104,18 @@ fun stretchBy(
          * A new direct gesture state invalidates any previous physics
          * animation.
          */
-        cancelAnimations()
+cancelAnimations()
 
+/*
+ * ENTRY:
+ *
+ * The gesture itself directly controls the width.
+ *
+ * This deliberately does NOT use SpringAnimation.
+ * Every gesture update must immediately produce a
+ * visible width change, otherwise the spring gets
+ * restarted before the user can see the stretch.
+ */
 val widthProgress =
     AOSP_ENTRY_WIDTH_INTERPOLATOR
         .getInterpolation(
@@ -1127,26 +1123,22 @@ val widthProgress =
         )
         .coerceIn(0f, 1f)
 
-/*
- * AOSP-style ENTRY stretch:
- *
- * resting position = 0
- * final position   = 48dp
- *
- * Therefore the indicator starts as a very thin
- * rounded rectangle and springs toward the full
- * 48dp width as the gesture progresses.
- */
-backgroundWidth.stretchBy(
-    finalPosition = fullSize,
-    amount = widthProgress,
-)
-
 val currentWidth =
-    backgroundWidth.pos
+    compressedWidth +
+        (
+            fullSize - compressedWidth
+        ) * widthProgress
 
 val currentHeight =
     fullSize
+
+backgroundWidth.snapTo(
+    currentWidth
+)
+
+backgroundHeight.snapTo(
+    currentHeight
+)
 
 val corner =
     squareCornerRadius.coerceAtMost(
