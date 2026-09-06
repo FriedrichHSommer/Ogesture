@@ -169,11 +169,7 @@ class BackIndicator(
     // ------------------------------------------------------------------------
 
     fun onGestureStart(rawY: Float) {
-        panel.animate().cancel()
-
-        panel.alpha = 1f
-        panel.scaleX = 1f
-        panel.scaleY = 1f
+        panel.resetForGesture()
 
         anchorRawY = rawY
         anchorPanelY = pillY(rawY)
@@ -191,11 +187,7 @@ class BackIndicator(
 
         currentState = GestureState.ENTRY
 
-        panel.setVisualState(
-            horizontalProgress = 0f,
-            backgroundProgress = 0f,
-            arrowProgress = 0f,
-        )
+        panel.resetForGesture()
     }
 
     fun onGestureProgress(
@@ -667,6 +659,23 @@ private class BackArrowView(
             android.content.res.Configuration.UI_MODE_NIGHT_YES
     }
 
+    fun resetForGesture() {
+        jumpAnimator?.cancel()
+        animatedHorizontal.cancel()
+        animatedBackground.cancel()
+        animatedArrow.cancel()
+
+        active = false
+        jumpOffset = 0f
+
+        horizontalProgress = 0f
+        backgroundProgress = 0f
+        arrowProgress = 0f
+
+        updateHorizontalTranslation()
+        invalidate()
+    }
+
     fun setVisualState(
         horizontalProgress: Float,
         backgroundProgress: Float,
@@ -734,80 +743,43 @@ private class BackArrowView(
     }
     
     fun activate(
-        onExpanded: (() -> Unit)? = null,
+        onActivated: (() -> Unit)? = null,
     ) {
         if (active) return
 
-        /*
-         * 先把当前已经压缩的圆角方形展开到完整正方形。
-         *
-         * 这一步结束以后，才真正切换成圆形。
-         */
+        animatedBackground.cancel()
         jumpAnimator?.cancel()
 
-        animatedBackground.cancel()
+        backgroundProgress = 1f
+        active = true
 
-        animatedBackground.setFloatValues(
-            backgroundProgress,
-            1f,
+        performHapticFeedback(
+            HapticFeedbackConstants.CONFIRM
         )
 
-        animatedBackground.duration = 80L
-        animatedBackground.interpolator =
-            DecelerateInterpolator()
+        jumpAnimator =
+            ValueAnimator.ofFloat(
+                0f,
+                1f,
+                0f,
+            ).apply {
+                duration = 120L
+                interpolator = DecelerateInterpolator()
 
-        animatedBackground.removeAllUpdateListeners()
-        animatedBackground.addUpdateListener {
-            backgroundProgress =
-                it.animatedValue as Float
+                addUpdateListener {
+                    jumpOffset =
+                        (it.animatedValue as Float) *
+                            5f * density
 
-            invalidate()
-        }
-
-        animatedBackground.removeAllListeners()
-        animatedBackground.addListener(
-            object : AnimatorListenerAdapter() {
-                override fun onAnimationEnd(
-                    animation: Animator,
-                ) {
-                    active = true
-
-                    performHapticFeedback(
-                    HapticFeedbackConstants.CONFIRM
-                    )
-
-                    /*
-                     * 正方形 → 圆形和 jump 在同一瞬间发生。
-                     */
-                    jumpAnimator =
-                        ValueAnimator.ofFloat(
-                            0f,
-                            1f,
-                            0f,
-                        ).apply {
-                            duration = 120L
-                            interpolator =
-                                DecelerateInterpolator()
-    
-                            addUpdateListener {
-                                jumpOffset =
-                                    (it.animatedValue as Float) *
-                                        5f * density
-    
-                                updateHorizontalTranslation()
-                                invalidate()
-                            }
-
-                            start()
-                        }
-
+                    updateHorizontalTranslation()
                     invalidate()
-                    onExpanded?.invoke()
                 }
+
+                start()
             }
-        )
-    
-        animatedBackground.start()
+
+        invalidate()
+        onActivated?.invoke()
     }
 
     /**
