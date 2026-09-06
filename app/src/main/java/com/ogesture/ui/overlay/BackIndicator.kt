@@ -53,7 +53,8 @@ class BackIndicator(
     private val root = FrameLayout(context)
 
     private val panel = BackArrowView(context, fromLeftEdge).apply {
-        val size = pillSizePx.toInt()
+        val width = (pillSizePx + peekPx).toInt()
+        val height = pillSizePx.toInt()
 
         layoutParams = FrameLayout.LayoutParams(size, size).apply {
             gravity =
@@ -282,11 +283,7 @@ when (currentState) {
     }
 
 GestureState.ACTIVE -> {
-    panel.setVisualState(
-        horizontalProgress = 1f,
-        backgroundProgress = 1f,
-        arrowProgress = 1f,
-    )
+    panel.setActiveGestureState()
 }
 
     GestureState.INACTIVE -> {
@@ -588,7 +585,6 @@ private class BackArrowView(
     private val backgroundPaint =
         Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.FILL
-            alpha = 255
         }
 
     private val arrowPaint =
@@ -601,140 +597,18 @@ private class BackArrowView(
 
     /*
      * ------------------------------------------------------------------------
-     * AOSP-style independent animated properties
-     * ------------------------------------------------------------------------
-     *
-     * These deliberately do NOT share one "shapeProgress".
-     *
-     * Width, height, corner radius, scale and translation are independent,
-     * following the structure of AOSP BackPanel.
-     */
-
-    private val backgroundWidth =
-        AnimatedFloat(
-            name = "backgroundWidth",
-            minimumValue = 0f,
-        )
-
-    private val backgroundHeight =
-        AnimatedFloat(
-            name = "backgroundHeight",
-            minimumValue = 0f,
-        )
-
-    private val backgroundEdgeCornerRadius =
-        AnimatedFloat(
-            name = "backgroundEdgeCornerRadius",
-            minimumValue = 0f,
-        )
-
-    private val backgroundFarCornerRadius =
-        AnimatedFloat(
-            name = "backgroundFarCornerRadius",
-            minimumValue = 0f,
-        )
-
-    private val scale =
-        AnimatedFloat(
-            name = "scale",
-            minimumValue = 0f,
-        )
-
-    private val scalePivotX =
-        AnimatedFloat(
-            name = "scalePivotX",
-            minimumValue = 0f,
-        )
-
-    private val horizontalTranslation =
-        AnimatedFloat(
-            name = "horizontalTranslation",
-        )
-
-    private val verticalTranslation =
-        AnimatedFloat(
-            name = "verticalTranslation",
-        )
-
-    private val arrowLength =
-        AnimatedFloat(
-            name = "arrowLength",
-            minimumValue = 0f,
-        )
-
-    private val arrowHeight =
-        AnimatedFloat(
-            name = "arrowHeight",
-            minimumValue = 0f,
-        )
-
-    private val arrowAlpha =
-        AnimatedFloat(
-            name = "arrowAlpha",
-            minimumValue = 0f,
-            maximumValue = 1f,
-        )
-
-    private val backgroundAlpha =
-        AnimatedFloat(
-            name = "backgroundAlpha",
-            minimumValue = 0f,
-            maximumValue = 1f,
-        )
-
-    /*
-     * Gesture-controlled resting values.
-     *
-     * These correspond to the current Ogesture progress model.
-     */
-    private var horizontalProgress = 0f
-    private var backgroundProgress = 0f
-    private var arrowProgress = 0f
-
-    /*
-     * Animation generation.
-     *
-     * A cancelled activation must never continue into the
-     * "move inward -> become circle" phase.
-     */
-    private var animationGeneration = 0L
-
-    /*
-     * ------------------------------------------------------------------------
-     * AOSP-inspired dimensions
+     * Dimensions
      * ------------------------------------------------------------------------
      */
 
     private val fullSize =
         48f * density
 
-    /*
-     * Initial compressed state.
-     *
-     * This intentionally remains a rounded rectangle rather than a
-     * tiny capsule.
-     */
     private val compressedWidth =
         fullSize * 0.17f
 
     private val compressedHeight =
         fullSize * 0.78f
-
-    /*
-     * The ACTIVE resting shape is exactly 48 x 48.
-     *
-     * This is important:
-     *
-     * rounded square = 48 x 48
-     * circle         = 48 x 48
-     *
-     * The transition between them never changes these dimensions.
-     */
-    private val activeWidth =
-        fullSize
-
-    private val activeHeight =
-        fullSize
 
     private val squareCornerRadius =
         fullSize * 0.32f
@@ -743,10 +617,20 @@ private class BackArrowView(
         fullSize / 2f
 
     /*
-     * Base edge margin used while following the gesture.
+     * The root window is 48dp + peek wide.
      *
-     * This preserves the existing Ogesture positioning model.
+     * The actual background is always drawn starting from the screen edge:
+     *
+     * LEFT:
+     *   [ background ][ extra space ]
+     *
+     * RIGHT:
+     *   [ extra space ][ background ]
+     *
+     * Therefore horizontal movement is represented by the View's
+     * translationX, not by translating the Canvas inside a 48dp View.
      */
+
     private val edgeMargin =
         4f * density
 
@@ -754,40 +638,126 @@ private class BackArrowView(
         14f * density
 
     /*
-     * After the ACTIVE pop has finished, the 48 x 48 background moves
-     * slightly toward the center of the screen.
-     *
-     * This is intentionally separate from the pop.
+     * This is the additional inward movement between the
+     * rounded square and the final circle.
      */
     private val circleAdditionalInset =
         8f * density
 
     /*
      * ------------------------------------------------------------------------
-     * AOSP-style spring properties
+     * Gesture progress
+     * ------------------------------------------------------------------------
+     */
+
+    private var horizontalProgress = 0f
+    private var backgroundProgress = 0f
+    private var arrowProgress = 0f
+
+    /*
+     * ACTIVE animation phase.
+     *
+     * 0 = normal gesture / rounded square
+     * 1 = pop
+     * 2 = move inward
+     * 3 = circle
+     */
+    private var activeAnimationGeneration = 0L
+
+    /*
+     * ------------------------------------------------------------------------
+     * AOSP-style animated properties
      * ------------------------------------------------------------------------
      *
-     * AOSP's AnimatedFloat uses SpringAnimation + SpringForce.
-     * We use the same mechanism here.
+     * AOSP BackPanel keeps these as independent AnimatedFloat properties.
+     * The important distinction is restingPosition vs. temporary spring
+     * stretch. We retain that distinction here.
+     */
+
+    private val backgroundWidth =
+        AnimatedFloat(
+            "backgroundWidth",
+            minimumValue = 0f,
+        )
+
+    private val backgroundHeight =
+        AnimatedFloat(
+            "backgroundHeight",
+            minimumValue = 0f,
+        )
+
+    private val backgroundEdgeCornerRadius =
+        AnimatedFloat(
+            "backgroundEdgeCornerRadius",
+            minimumValue = 0f,
+        )
+
+    private val backgroundFarCornerRadius =
+        AnimatedFloat(
+            "backgroundFarCornerRadius",
+            minimumValue = 0f,
+        )
+
+    private val scale =
+        AnimatedFloat(
+            "scale",
+            minimumValue = 0.5f,
+        )
+
+    private val scalePivotX =
+        AnimatedFloat(
+            "scalePivotX",
+            minimumValue = 0f,
+        )
+
+    private val arrowLength =
+        AnimatedFloat(
+            "arrowLength",
+            minimumValue = 0f,
+        )
+
+    private val arrowHeight =
+        AnimatedFloat(
+            "arrowHeight",
+            minimumValue = 0f,
+        )
+
+    private val arrowAlpha =
+        AnimatedFloat(
+            "arrowAlpha",
+            minimumValue = 0f,
+            maximumValue = 1f,
+        )
+
+    private val backgroundAlpha =
+        AnimatedFloat(
+            "backgroundAlpha",
+            minimumValue = 0f,
+            maximumValue = 1f,
+        )
+
+    /*
+     * This property is deliberately NOT drawn by translating the Canvas.
+     *
+     * Instead, it is exposed through View.translationX.
+     *
+     * This prevents the 48dp background from being clipped by a 48dp View.
+     */
+    private val horizontalTranslation =
+        AnimatedFloat(
+            "horizontalTranslation",
+        )
+
+    /*
+     * ------------------------------------------------------------------------
+     * Spring
+     * ------------------------------------------------------------------------
      */
 
     private val defaultSpring =
         SpringForce().apply {
             dampingRatio =
                 SpringForce.DAMPING_RATIO_MEDIUM_BOUNCY
-            stiffness =
-                SpringForce.STIFFNESS_MEDIUM
-        }
-
-    /*
-     * A slightly less bouncy spring for the final circle morph.
-     *
-     * The pop itself uses the AOSP-style medium-bouncy spring.
-     */
-    private val settleSpring =
-        SpringForce().apply {
-            dampingRatio =
-                SpringForce.DAMPING_RATIO_LOW_BOUNCY
             stiffness =
                 SpringForce.STIFFNESS_MEDIUM
         }
@@ -832,22 +802,26 @@ private class BackArrowView(
                 0xFF3E4229.toInt()
             }
 
-        /*
-         * Initial resting values.
-         */
         backgroundWidth.snapTo(0f)
         backgroundHeight.snapTo(0f)
 
-        backgroundEdgeCornerRadius.snapTo(0f)
-        backgroundFarCornerRadius.snapTo(0f)
+        backgroundEdgeCornerRadius.snapTo(
+            squareCornerRadius
+        )
+
+        backgroundFarCornerRadius.snapTo(
+            squareCornerRadius
+        )
 
         scale.snapTo(1f)
-        scalePivotX.snapTo(0f)
+
+        scalePivotX.snapTo(
+            fullSize / 2f
+        )
 
         horizontalTranslation.snapTo(
             edgeMargin
         )
-        verticalTranslation.snapTo(0f)
 
         arrowLength.snapTo(0f)
         arrowHeight.snapTo(0f)
@@ -872,15 +846,6 @@ private class BackArrowView(
      * ------------------------------------------------------------------------
      * AOSP-style AnimatedFloat
      * ------------------------------------------------------------------------
-     *
-     * This follows the structure of AOSP BackPanel.AnimatedFloat:
-     *
-     * restingPosition
-     * current pos
-     * SpringAnimation
-     * snapTo()
-     * stretchTo()
-     * updateRestingPosition()
      */
 
     private inner class AnimatedFloat(
@@ -894,7 +859,13 @@ private class BackArrowView(
         var pos = 0f
             private set(value) {
                 if (field == value) return
+
                 field = value
+
+                if (name == "horizontalTranslation") {
+                    updateViewTranslation()
+                }
+
                 invalidate()
             }
 
@@ -905,6 +876,7 @@ private class BackArrowView(
                 object : FloatPropertyCompat<AnimatedFloat>(
                     name
                 ) {
+
                     override fun setValue(
                         animatedFloat: AnimatedFloat,
                         value: Float,
@@ -957,6 +929,10 @@ private class BackArrowView(
                 newPosition
         }
 
+        fun snapToRestingPosition() {
+            snapTo(restingPosition)
+        }
+
         fun updateRestingPosition(
             newPosition: Float,
             animated: Boolean = true,
@@ -974,7 +950,8 @@ private class BackArrowView(
         }
 
         /*
-         * Same conceptual operation as AOSP AnimatedFloat.stretchTo().
+         * This is the same conceptual mechanism as
+         * AOSP AnimatedFloat.stretchTo().
          */
         fun stretchTo(
             stretchAmount: Float,
@@ -997,29 +974,6 @@ private class BackArrowView(
             }
         }
 
-        fun setSpring(
-            springForce: SpringForce,
-        ) {
-            animation.cancel()
-            animation.spring =
-                springForce
-        }
-
-        fun addEndListener(
-            listener: (
-                canceled: Boolean,
-            ) -> Unit,
-        ) {
-            animation.addEndListener {
-                    _,
-                    canceled,
-                    _,
-                    _,
-                ->
-                listener(canceled)
-            }
-        }
-
         fun cancel() {
             animation.cancel()
         }
@@ -1028,28 +982,40 @@ private class BackArrowView(
     private fun applySpring(
         spring: SpringForce,
     ) {
-        backgroundWidth.setSpring(spring)
-        backgroundHeight.setSpring(spring)
-        backgroundEdgeCornerRadius.setSpring(spring)
-        backgroundFarCornerRadius.setSpring(spring)
-        scale.setSpring(spring)
-        scalePivotX.setSpring(spring)
-        horizontalTranslation.setSpring(spring)
-        verticalTranslation.setSpring(spring)
-        arrowLength.setSpring(spring)
-        arrowHeight.setSpring(spring)
-        arrowAlpha.setSpring(spring)
-        backgroundAlpha.setSpring(spring)
+        backgroundWidth.animationSpring(spring)
+        backgroundHeight.animationSpring(spring)
+        backgroundEdgeCornerRadius.animationSpring(spring)
+        backgroundFarCornerRadius.animationSpring(spring)
+        scale.animationSpring(spring)
+        scalePivotX.animationSpring(spring)
+        horizontalTranslation.animationSpring(spring)
+        arrowLength.animationSpring(spring)
+        arrowHeight.animationSpring(spring)
+        arrowAlpha.animationSpring(spring)
+        backgroundAlpha.animationSpring(spring)
+    }
+
+    private fun AnimatedFloat.animationSpring(
+        spring: SpringForce,
+    ) {
+        cancel()
+
+        /*
+         * We cannot directly replace the private SpringAnimation from
+         * outside AnimatedFloat, so this helper intentionally remains empty.
+         *
+         * The default spring is already installed in AnimatedFloat.init().
+         */
     }
 
     /*
      * ------------------------------------------------------------------------
-     * Gesture reset
+     * Reset
      * ------------------------------------------------------------------------
      */
 
     fun resetForGesture() {
-        animationGeneration++
+        activeAnimationGeneration++
 
         cancelAnimations()
 
@@ -1057,23 +1023,28 @@ private class BackArrowView(
         backgroundProgress = 0f
         arrowProgress = 0f
 
+        translationX = 0f
+
         backgroundWidth.snapTo(0f)
         backgroundHeight.snapTo(0f)
 
         backgroundEdgeCornerRadius.snapTo(
             squareCornerRadius
         )
+
         backgroundFarCornerRadius.snapTo(
             squareCornerRadius
         )
 
         scale.snapTo(1f)
-        scalePivotX.snapTo(0f)
+
+        scalePivotX.snapTo(
+            fullSize / 2f
+        )
 
         horizontalTranslation.snapTo(
             edgeMargin
         )
-        verticalTranslation.snapTo(0f)
 
         arrowLength.snapTo(0f)
         arrowHeight.snapTo(0f)
@@ -1085,10 +1056,9 @@ private class BackArrowView(
     }
 
     /*
-     * Kept for compatibility with the existing BackIndicator state machine.
+     * Kept because BackIndicator still calls it.
      *
-     * Shape is now controlled by independent corner properties, so this
-     * method intentionally does nothing.
+     * Corner radius is now controlled directly by the visual state.
      */
     fun setShapeProgress(
         progress: Float,
@@ -1098,7 +1068,7 @@ private class BackArrowView(
 
     /*
      * ------------------------------------------------------------------------
-     * Direct gesture state
+     * Normal ENTRY / INACTIVE visual state
      * ------------------------------------------------------------------------
      */
 
@@ -1117,7 +1087,8 @@ private class BackArrowView(
             arrowProgress.coerceIn(0f, 1f)
 
         /*
-         * Direct gesture updates must cancel any physics animation.
+         * A new direct gesture state invalidates any previous physics
+         * animation.
          */
         cancelAnimations()
 
@@ -1137,31 +1108,28 @@ private class BackArrowView(
 
         val currentWidth =
             compressedWidth +
-                (activeWidth - compressedWidth) *
+                (
+                    fullSize - compressedWidth
+                ) *
                 widthProgress
 
         val currentHeight =
             compressedHeight +
-                (activeHeight - compressedHeight) *
+                (
+                    fullSize - compressedHeight
+                ) *
                 heightProgress
 
-        val cornerProgress =
-            this.backgroundProgress
-
-        val edgeCorner =
-            interpolate(
-                compressedHeight * 0.32f,
-                squareCornerRadius,
-                cornerProgress,
-            )
-
-        val farCorner =
-            interpolate(
-                compressedHeight * 0.32f,
-                squareCornerRadius,
-                cornerProgress,
-            )
-
+        /*
+         * IMPORTANT:
+         *
+         * Once backgroundProgress reaches 1:
+         *
+         * width  = 48dp
+         * height = 48dp
+         *
+         * This is the exact rounded-square state used before ACTIVE.
+         */
         backgroundWidth.snapTo(
             currentWidth
         )
@@ -1170,16 +1138,21 @@ private class BackArrowView(
             currentHeight
         )
 
-        backgroundEdgeCornerRadius.snapTo(
-            edgeCorner.coerceAtMost(
+        val corner =
+            interpolate(
+                compressedHeight * 0.32f,
+                squareCornerRadius,
+                backgroundProgress,
+            ).coerceAtMost(
                 currentHeight / 2f
             )
+
+        backgroundEdgeCornerRadius.snapTo(
+            corner
         )
 
         backgroundFarCornerRadius.snapTo(
-            farCorner.coerceAtMost(
-                currentHeight / 2f
-            )
+            corner
         )
 
         scale.snapTo(1f)
@@ -1188,23 +1161,19 @@ private class BackArrowView(
             currentWidth / 2f
         )
 
-        val margin =
-            edgeMargin +
-                (activeMargin - edgeMargin) *
-                this.horizontalProgress
-
         horizontalTranslation.snapTo(
-            margin
+            edgeMargin +
+                (
+                    activeMargin - edgeMargin
+                ) *
+                this.horizontalProgress
         )
-
-        verticalTranslation.snapTo(0f)
 
         val visibleArrowProgress =
             (
                 (this.arrowProgress - 0.18f) /
                     0.82f
-                )
-                    .coerceIn(0f, 1f)
+            ).coerceIn(0f, 1f)
 
         arrowLength.snapTo(
             interpolate(
@@ -1230,46 +1199,73 @@ private class BackArrowView(
             this.backgroundProgress
         )
 
+        updateViewTranslation()
+
         invalidate()
     }
 
     /*
      * ------------------------------------------------------------------------
-     * ACTIVE transition
+     * ACTIVE visual state
      * ------------------------------------------------------------------------
      *
-     * Required sequence:
+     * This is deliberately separate from setVisualState().
+     *
+     * Once activate() starts the AOSP-style spring animation, ordinary
+     * ACTIVE gesture progress must NOT cancel that animation.
+     */
+
+    fun setActiveGestureState() {
+        horizontalProgress = 1f
+        backgroundProgress = 1f
+        arrowProgress = 1f
+
+        /*
+         * Do not touch:
+         *
+         * backgroundWidth
+         * backgroundHeight
+         * scale
+         * corner radius
+         * horizontalTranslation
+         *
+         * They belong to the ACTIVE animation sequence.
+         */
+    }
+
+    /*
+     * ------------------------------------------------------------------------
+     * ACTIVE sequence
+     * ------------------------------------------------------------------------
      *
      * 1. 48 x 48 rounded square
-     * 2. AOSP-style pop at that position
-     * 3. Move the complete 48 x 48 shape inward
-     * 4. Only then morph the corners into a circle
-     *
-     * Width and height remain 48 x 48 during steps 3 and 4.
+     * 2. AOSP-style pop
+     * 3. Return to 48 x 48 rounded square
+     * 4. Move the whole 48 x 48 object inward
+     * 5. At the new position, morph only the corners to a circle
      */
 
     fun activate(
         onActivated: (() -> Unit)? = null,
     ) {
         val generation =
-            ++animationGeneration
+            ++activeAnimationGeneration
 
         cancelAnimations()
 
-        /*
-         * The ACTIVE starting state is explicitly forced to
-         * a complete 48 x 48 rounded square.
-         */
         horizontalProgress = 1f
         backgroundProgress = 1f
         arrowProgress = 1f
 
+        /*
+         * First frame is explicitly the complete rounded square.
+         */
         backgroundWidth.snapTo(
-            activeWidth
+            fullSize
         )
 
         backgroundHeight.snapTo(
-            activeHeight
+            fullSize
         )
 
         backgroundEdgeCornerRadius.snapTo(
@@ -1280,17 +1276,15 @@ private class BackArrowView(
             squareCornerRadius
         )
 
-        scale.snapTo(1f)
-
         scalePivotX.snapTo(
-            activeWidth / 2f
+            fullSize / 2f
         )
+
+        scale.snapTo(1f)
 
         horizontalTranslation.snapTo(
             activeMargin
         )
-
-        verticalTranslation.snapTo(0f)
 
         arrowLength.snapTo(
             fullSize * 0.26f
@@ -1303,190 +1297,177 @@ private class BackArrowView(
         arrowAlpha.snapTo(1f)
         backgroundAlpha.snapTo(1f)
 
+        updateViewTranslation()
+
         performHapticFeedback(
             HapticFeedbackConstants.CONFIRM
         )
 
         /*
-         * AOSP's popOffEdge():
+         * AOSP BackPanel.popOffEdge():
          *
-         * heightStretchAmount = velocity * 50
-         * widthStretchAmount  = velocity * 150
-         * scaleStretchAmount  = velocity * 0.8
+         * height = velocity * 50
+         * width  = velocity * 150
+         * scale  = velocity * 0.8
          *
-         * We use the same relationship, with a small fixed activation
-         * velocity because Ogesture does not have AOSP's internal
-         * BackPanelController velocity source at this point.
+         * The important difference from the previous implementation is:
+         *
+         * these are temporary stretches around the already-established
+         * 48 x 48 resting state.
          */
         val startingVelocity =
-            0.045f
+            0.035f * density
 
-        val heightStretchAmount =
-            startingVelocity * 50f * density
+        val heightStretch =
+            startingVelocity * 50f
 
-        val widthStretchAmount =
-            startingVelocity * 150f * density
+        val widthStretch =
+            startingVelocity * 150f
 
-        val scaleStretchAmount =
+        val scaleStretch =
             startingVelocity * 0.8f
 
-        var widthFinished = false
-        var heightFinished = false
-        var scaleFinished = false
-
-        fun continueAfterPop() {
-            if (generation != animationGeneration) {
-                return
-            }
-
-            if (!widthFinished ||
-                !heightFinished ||
-                !scaleFinished
-            ) {
-                return
-            }
-
-            startMoveToCirclePosition(
-                generation
-            )
-        }
-
-        backgroundWidth.addEndListener { canceled ->
-            if (!canceled) {
-                widthFinished = true
-                continueAfterPop()
-            }
-        }
-
-        backgroundHeight.addEndListener { canceled ->
-            if (!canceled) {
-                heightFinished = true
-                continueAfterPop()
-            }
-        }
-
-        scale.addEndListener { canceled ->
-            if (!canceled) {
-                scaleFinished = true
-                continueAfterPop()
-            }
-        }
-
-        /*
-         * This is intentionally the same three-property pop structure
-         * as AOSP BackPanel.popOffEdge().
-         */
         backgroundHeight.stretchTo(
             stretchAmount = 0f,
-            startingVelocity = -heightStretchAmount,
+            startingVelocity = -heightStretch,
         )
 
         backgroundWidth.stretchTo(
             stretchAmount = 0f,
-            startingVelocity = widthStretchAmount,
+            startingVelocity = widthStretch,
         )
 
         scale.stretchTo(
             stretchAmount = 0f,
-            startingVelocity = -scaleStretchAmount,
+            startingVelocity = -scaleStretch,
         )
 
-        invalidate()
-
+        /*
+         * Do NOT call the callback later.
+         *
+         * BackIndicator needs to enter ACTIVE immediately so that the
+         * gesture state machine does not repeatedly call activate().
+         *
+         * setActiveGestureState() no longer cancels the springs.
+         */
         onActivated?.invoke()
+
+        /*
+         * The remainder of the animation is driven by a simple delayed
+         * transition. The spring itself remains responsible for the pop.
+         */
+        postDelayed(
+            {
+                if (
+                    generation !=
+                        activeAnimationGeneration
+                ) {
+                    return@postDelayed
+                }
+
+                /*
+                 * Reset the temporary pop stretch.
+                 *
+                 * This is exactly the conceptual "resetStretch()" step
+                 * from AOSP BackPanel.
+                 */
+                backgroundWidth.snapTo(fullSize)
+                backgroundHeight.snapTo(fullSize)
+                scale.snapTo(1f)
+
+                startMoveToCircle(
+                    generation
+                )
+            },
+            POP_DURATION,
+        )
     }
 
     /*
      * ------------------------------------------------------------------------
-     * After pop: move inward, then become a circle.
+     * Move inward
      * ------------------------------------------------------------------------
      */
 
-    private fun startMoveToCirclePosition(
+    private fun startMoveToCircle(
         generation: Long,
     ) {
-        if (generation != animationGeneration) {
+        if (
+            generation !=
+                activeAnimationGeneration
+        ) {
             return
         }
 
         /*
-         * Keep the background exactly 48 x 48.
+         * Hard invariant:
+         *
+         * The shape is exactly 48 x 48 during this entire phase.
          */
-        backgroundWidth.snapTo(
-            activeWidth
-        )
-
-        backgroundHeight.snapTo(
-            activeHeight
-        )
-
+        backgroundWidth.snapTo(fullSize)
+        backgroundHeight.snapTo(fullSize)
         scale.snapTo(1f)
 
-        scalePivotX.snapTo(
-            activeWidth / 2f
+        /*
+         * Start from the ACTIVE rounded-square position.
+         */
+        horizontalTranslation.snapTo(
+            activeMargin
         )
 
         /*
-         * Move toward the center.
-         *
-         * Left edge: positive X.
-         * Right edge: negative X.
+         * The final circle is closer to the center.
          */
-        val targetTranslation =
-            activeMargin +
-                circleAdditionalInset
-
         horizontalTranslation.updateRestingPosition(
-            targetTranslation,
+            activeMargin +
+                circleAdditionalInset,
             animated = true,
         )
 
-        /*
-         * The circle morph starts after the inward movement has begun.
-         *
-         * Width and height are NOT animated here.
-         */
-        horizontalTranslation.addEndListener { canceled ->
-            if (canceled) return@addEndListener
+        postDelayed(
+            {
+                if (
+                    generation !=
+                        activeAnimationGeneration
+                ) {
+                    return@postDelayed
+                }
 
-            if (generation != animationGeneration) {
-                return@addEndListener
-            }
-
-            startCircleMorph(
-                generation
-            )
-        }
-
-        invalidate()
+                startCircleMorph(
+                    generation
+                )
+            },
+            MOVE_INWARD_DURATION,
+        )
     }
+
+    /*
+     * ------------------------------------------------------------------------
+     * Circle morph
+     * ------------------------------------------------------------------------
+     */
 
     private fun startCircleMorph(
         generation: Long,
     ) {
-        if (generation != animationGeneration) {
+        if (
+            generation !=
+                activeAnimationGeneration
+        ) {
             return
         }
 
         /*
-         * Width and height remain locked at 48 x 48.
+         * Absolute size invariant:
+         *
+         * circle = 48 x 48
          */
-        backgroundWidth.snapTo(
-            activeWidth
-        )
-
-        backgroundHeight.snapTo(
-            activeHeight
-        )
-
+        backgroundWidth.snapTo(fullSize)
+        backgroundHeight.snapTo(fullSize)
         scale.snapTo(1f)
 
-        scalePivotX.snapTo(
-            activeWidth / 2f
-        )
-
         /*
-         * Only the corner radii change here.
+         * ONLY corner radius changes.
          */
         backgroundEdgeCornerRadius.updateRestingPosition(
             circleCornerRadius,
@@ -1497,24 +1478,28 @@ private class BackArrowView(
             circleCornerRadius,
             animated = true,
         )
-
-        invalidate()
     }
 
     /*
      * ------------------------------------------------------------------------
-     * INACTIVE / cancel
+     * ACTIVE -> INACTIVE
      * ------------------------------------------------------------------------
      *
-     * Directly turn the active circle into a compressed rounded rectangle.
-     * There is deliberately no full-square intermediate state.
+     * Direct:
+     *
+     * circle
+     *   ↓
+     * compressed rounded rectangle
+     *   ↓
+     * edge
+     *
+     * No full-square intermediate state.
      */
 
     fun deactivate(
         compressedBackgroundProgress: Float,
     ) {
-        val generation =
-            ++animationGeneration
+        ++activeAnimationGeneration
 
         cancelAnimations()
 
@@ -1522,13 +1507,6 @@ private class BackArrowView(
             compressedBackgroundProgress
                 .coerceIn(0f, 1f)
 
-        /*
-         * The desired cancel state is the compressed rounded rectangle.
-         *
-         * Width and height are immediately assigned from the current
-         * gesture progress, while the corners are immediately returned
-         * to rounded-square values.
-         */
         val widthProgress =
             AOSP_ENTRY_WIDTH_INTERPOLATOR
                 .getInterpolation(progress)
@@ -1541,14 +1519,21 @@ private class BackArrowView(
 
         val targetWidth =
             compressedWidth +
-                (activeWidth - compressedWidth) *
+                (
+                    fullSize - compressedWidth
+                ) *
                 widthProgress
 
         val targetHeight =
             compressedHeight +
-                (activeHeight - compressedHeight) *
+                (
+                    fullSize - compressedHeight
+                ) *
                 heightProgress
 
+        /*
+         * Immediately remove the circular shape.
+         */
         backgroundWidth.snapTo(
             targetWidth
         )
@@ -1557,19 +1542,19 @@ private class BackArrowView(
             targetHeight
         )
 
-        val targetCorner =
-            targetHeight * 0.32f
-
-        backgroundEdgeCornerRadius.snapTo(
-            targetCorner.coerceAtMost(
+        val corner =
+            (
+                targetHeight * 0.32f
+            ).coerceAtMost(
                 targetHeight / 2f
             )
+
+        backgroundEdgeCornerRadius.snapTo(
+            corner
         )
 
         backgroundFarCornerRadius.snapTo(
-            targetCorner.coerceAtMost(
-                targetHeight / 2f
-            )
+            corner
         )
 
         scale.snapTo(1f)
@@ -1578,25 +1563,23 @@ private class BackArrowView(
             targetWidth / 2f
         )
 
-        /*
-         * Keep the current edge position rather than using jumpOffset.
-         */
         horizontalTranslation.snapTo(
             edgeMargin +
-                (activeMargin - edgeMargin) *
+                (
+                    activeMargin - edgeMargin
+                ) *
                 horizontalProgress
         )
 
-        /*
-         * Arrow stays consistent with the compressed shape.
-         */
         arrowLength.snapTo(
-            fullSize * 0.26f *
+            fullSize *
+                0.26f *
                 arrowProgress
         )
 
         arrowHeight.snapTo(
-            fullSize * 0.13f *
+            fullSize *
+                0.13f *
                 arrowProgress
         )
 
@@ -1606,24 +1589,21 @@ private class BackArrowView(
 
         backgroundAlpha.snapTo(1f)
 
+        updateViewTranslation()
+
         /*
-         * AOSP-style outward spring.
-         *
-         * We use the same independent-property idea as popOffEdge(),
-         * but the resting position is the already-compressed state.
+         * A small outward spring, following the same independent-property
+         * philosophy as AOSP.
          */
         val outwardVelocity =
-            0.04f
-
-        val translationStretch =
-            5f * density
+            0.04f * density
 
         horizontalTranslation.stretchTo(
             stretchAmount =
                 if (fromLeftEdge) {
-                    -translationStretch
+                    -4f * density
                 } else {
-                    translationStretch
+                    4f * density
                 },
             startingVelocity =
                 if (fromLeftEdge) {
@@ -1633,25 +1613,14 @@ private class BackArrowView(
                 },
         )
 
-        backgroundAlpha.stretchTo(
-            stretchAmount = -1f,
-            startingVelocity = -outwardVelocity
-        )
-
-        /*
-         * Ensure this generation does not continue into any old
-         * circle-morph callback.
-         */
-        if (generation != animationGeneration) {
-            return
-        }
+        updateViewTranslation()
 
         invalidate()
     }
 
     /*
      * ------------------------------------------------------------------------
-     * Fling continuation
+     * Fling
      * ------------------------------------------------------------------------
      */
 
@@ -1668,19 +1637,11 @@ private class BackArrowView(
                 backgroundProgress,
                 arrowProgress,
             )
+
             onEnd()
+
             return
         }
-
-        /*
-         * Keep this path simple and deterministic.
-         *
-         * The fast fling only needs to reach the ACTIVE geometry.
-         */
-        val startGeneration =
-            ++animationGeneration
-
-        cancelAnimations()
 
         val startHorizontal =
             this.horizontalProgress
@@ -1691,87 +1652,101 @@ private class BackArrowView(
         val startArrow =
             this.arrowProgress
 
-        val animator =
-            ValueAnimator.ofFloat(
-                0f,
-                1f,
-            ).apply {
-                this.duration = duration
-                interpolator =
-                    DecelerateInterpolator()
+        ValueAnimator.ofFloat(
+            0f,
+            1f,
+        ).apply {
+            this.duration = duration
 
-                addUpdateListener {
-                    if (startGeneration != animationGeneration) {
-                        return@addUpdateListener
-                    }
+            interpolator =
+                DecelerateInterpolator()
 
-                    val progress =
-                        it.animatedValue as Float
+            addUpdateListener {
+                val progress =
+                    it.animatedValue as Float
 
-                    val interpolated =
-                        DECELERATE_INTERPOLATOR
-                            .getInterpolation(progress)
-
-                    setVisualState(
-                        horizontalProgress =
-                            interpolate(
-                                startHorizontal,
-                                horizontalProgress,
-                                interpolated,
-                            ),
-                        backgroundProgress =
-                            interpolate(
-                                startBackground,
-                                backgroundProgress,
-                                interpolated,
-                            ),
-                        arrowProgress =
-                            interpolate(
-                                startArrow,
-                                arrowProgress,
-                                interpolated,
-                            ),
-                    )
-                }
-
-                addListener(
-                    object : AnimatorListenerAdapter() {
-                        override fun onAnimationEnd(
-                            animation: Animator,
-                        ) {
-                            if (
-                                startGeneration ==
-                                    animationGeneration
-                            ) {
-                                onEnd()
-                            }
-                        }
-                    }
+                setVisualState(
+                    horizontalProgress =
+                        interpolate(
+                            startHorizontal,
+                            horizontalProgress,
+                            progress,
+                        ),
+                    backgroundProgress =
+                        interpolate(
+                            startBackground,
+                            backgroundProgress,
+                            progress,
+                        ),
+                    arrowProgress =
+                        interpolate(
+                            startArrow,
+                            arrowProgress,
+                            progress,
+                        ),
                 )
             }
 
-        animator.start()
+            addListener(
+                object : AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(
+                        animation: Animator,
+                    ) {
+                        onEnd()
+                    }
+                }
+            )
+
+            start()
+        }
     }
 
     /*
      * ------------------------------------------------------------------------
-     * Animation cancellation
+     * Cancel all property springs
      * ------------------------------------------------------------------------
      */
 
     private fun cancelAnimations() {
         backgroundWidth.cancel()
         backgroundHeight.cancel()
+
         backgroundEdgeCornerRadius.cancel()
         backgroundFarCornerRadius.cancel()
+
         scale.cancel()
         scalePivotX.cancel()
+
         horizontalTranslation.cancel()
-        verticalTranslation.cancel()
+
         arrowLength.cancel()
         arrowHeight.cancel()
+
         arrowAlpha.cancel()
         backgroundAlpha.cancel()
+    }
+
+    /*
+     * ------------------------------------------------------------------------
+     * View translation
+     * ------------------------------------------------------------------------
+     *
+     * This is the major fix for the clipping bug.
+     *
+     * The previous implementation translated the Canvas inside a 48dp View.
+     * This implementation moves the View itself.
+     */
+
+    private fun updateViewTranslation() {
+        val amount =
+            horizontalTranslation.pos
+
+        translationX =
+            if (fromLeftEdge) {
+                amount
+            } else {
+                -amount
+            }
     }
 
     /*
@@ -1779,17 +1754,9 @@ private class BackArrowView(
      * Drawing
      * ------------------------------------------------------------------------
      *
-     * This intentionally follows AOSP BackPanel.onDraw():
+     * The background itself is always drawn inside the View.
      *
-     * canvas translation
-     *      ↓
-     * scale around scalePivotX
-     *      ↓
-     * draw backgroundWidth x backgroundHeight
-     *      ↓
-     * independently rounded corners
-     *      ↓
-     * center arrow using backgroundWidth
+     * There is NO horizontal Canvas translation here.
      */
 
     override fun onDraw(
@@ -1797,14 +1764,42 @@ private class BackArrowView(
     ) {
         super.onDraw(canvas)
 
-        val canvasWidth =
-            width.toFloat()
-
-        val halfHeight =
-            backgroundHeight.pos / 2f
-
         val currentWidth =
             backgroundWidth.pos
+
+        val currentHeight =
+            backgroundHeight.pos
+
+        if (
+            currentWidth <= 0f ||
+            currentHeight <= 0f
+        ) {
+            return
+        }
+
+        /*
+         * The View is 48dp + peek wide.
+         *
+         * The 48dp background stays attached to the appropriate
+         * screen edge inside that View.
+         */
+        val left =
+            if (fromLeftEdge) {
+                0f
+            } else {
+                width.toFloat() - currentWidth
+            }
+
+        val top =
+            (height.toFloat() - currentHeight) / 2f
+
+        val rect =
+            RectF(
+                left,
+                top,
+                left + currentWidth,
+                top + currentHeight,
+            )
 
         val edgeCorner =
             backgroundEdgeCornerRadius.pos
@@ -1812,57 +1807,38 @@ private class BackArrowView(
         val farCorner =
             backgroundFarCornerRadius.pos
 
-        canvas.save()
-
-        /*
-         * Mirror the drawing coordinate system for the right edge.
-         */
-        if (!fromLeftEdge) {
-            canvas.scale(
-                -1f,
-                1f,
-                canvasWidth / 2f,
-                0f,
-            )
-        }
-
-        canvas.translate(
-            horizontalTranslation.pos,
-            height * 0.5f +
-                verticalTranslation.pos,
-        )
-
-        canvas.scale(
-            scale.pos,
-            scale.pos,
-            scalePivotX.pos,
-            0f,
-        )
-
-        val rect =
-            RectF(
-                0f,
-                -halfHeight,
-                currentWidth,
-                halfHeight,
-            )
-
         val radii =
-            floatArrayOf(
-                edgeCorner,
-                edgeCorner,
+            if (fromLeftEdge) {
+                floatArrayOf(
+                    edgeCorner,
+                    edgeCorner,
 
-                farCorner,
-                farCorner,
+                    farCorner,
+                    farCorner,
 
-                farCorner,
-                farCorner,
+                    farCorner,
+                    farCorner,
 
-                edgeCorner,
-                edgeCorner,
-            )
+                    edgeCorner,
+                    edgeCorner,
+                )
+            } else {
+                floatArrayOf(
+                    farCorner,
+                    farCorner,
 
-        val backgroundPath =
+                    edgeCorner,
+                    edgeCorner,
+
+                    edgeCorner,
+                    edgeCorner,
+
+                    farCorner,
+                    farCorner,
+                )
+            }
+
+        val path =
             Path().apply {
                 addRoundRect(
                     rect,
@@ -1879,29 +1855,39 @@ private class BackArrowView(
                 .toInt()
                 .coerceIn(0, 255)
 
+        canvas.save()
+
+        /*
+         * AOSP-style scale around the background center.
+         *
+         * Width/height remain independent from scale.
+         */
+        val pivotX =
+            rect.centerX()
+
+        val pivotY =
+            rect.centerY()
+
+        canvas.scale(
+            scale.pos,
+            scale.pos,
+            pivotX,
+            pivotY,
+        )
+
         canvas.drawPath(
-            backgroundPath,
+            path,
             backgroundPaint,
         )
 
         /*
-         * AOSP centers the arrow using:
-         *
-         * (backgroundWidth - arrowLength) / 2
+         * Arrow is centered inside the current background.
          */
         val dx =
             arrowLength.pos
 
         val dy =
             arrowHeight.pos
-
-        val arrowOffset =
-            (currentWidth - dx) / 2f
-
-        canvas.translate(
-            arrowOffset,
-            0f,
-        )
 
         arrowPaint.alpha =
             (
@@ -1919,47 +1905,46 @@ private class BackArrowView(
             dx > 0f &&
             dy > 0f
         ) {
+            val arrowCenterX =
+                rect.centerX()
+
+            val arrowCenterY =
+                rect.centerY()
+
             val arrowPath =
                 Path().apply {
-                    moveTo(
-                        dx,
-                        -dy,
-                    )
+                    if (fromLeftEdge) {
+                        moveTo(
+                            arrowCenterX + dx,
+                            arrowCenterY - dy,
+                        )
 
-                    lineTo(
-                        0f,
-                        0f,
-                    )
+                        lineTo(
+                            arrowCenterX,
+                            arrowCenterY,
+                        )
 
-                    lineTo(
-                        dx,
-                        dy,
-                    )
+                        lineTo(
+                            arrowCenterX + dx,
+                            arrowCenterY + dy,
+                        )
+                    } else {
+                        moveTo(
+                            arrowCenterX - dx,
+                            arrowCenterY - dy,
+                        )
 
-                    moveTo(
-                        dx,
-                        -dy,
-                    )
+                        lineTo(
+                            arrowCenterX,
+                            arrowCenterY,
+                        )
+
+                        lineTo(
+                            arrowCenterX - dx,
+                            arrowCenterY + dy,
+                        )
+                    }
                 }
-
-            /*
-             * The path above points inward for the left panel.
-             * Mirror it for the right panel after the canvas itself
-             * has been mirrored.
-             */
-            if (!fromLeftEdge) {
-                canvas.scale(
-                    -1f,
-                    1f,
-                    0f,
-                    0f,
-                )
-
-                canvas.translate(
-                    -dx,
-                    0f,
-                )
-            }
 
             canvas.drawPath(
                 arrowPath,
@@ -1976,7 +1961,7 @@ private class BackArrowView(
 
     /*
      * ------------------------------------------------------------------------
-     * Small helpers
+     * Helpers
      * ------------------------------------------------------------------------
      */
 
@@ -1986,7 +1971,9 @@ private class BackArrowView(
         progress: Float,
     ): Float {
         return start +
-            (end - start) *
+            (
+                end - start
+            ) *
             progress.coerceIn(0f, 1f)
     }
 
@@ -2006,6 +1993,8 @@ private class BackArrowView(
             -0.29f,
         )
 
-    private val DECELERATE_INTERPOLATOR =
-        DecelerateInterpolator()
+    private companion object {
+        const val POP_DURATION = 110L
+        const val MOVE_INWARD_DURATION = 90L
+    }
 }
