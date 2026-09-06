@@ -73,6 +73,8 @@ class BackIndicator(
     private var lastVelocityPxPerSec = 0f
 
     private var currentState = GestureState.GONE
+    private var previousDistancePx = 0f
+    private var totalTouchDeltaPx = 0f
 
     init {
         root.addView(panel)
@@ -179,6 +181,8 @@ class BackIndicator(
         lastProgressTime = now
         lastProgressDistance = 0f
         lastVelocityPxPerSec = 0f
+        previousDistancePx = 0f
+        totalTouchDeltaPx = 0f
 
         panel.translationY = clampPanelY(anchorPanelY)
 
@@ -197,67 +201,125 @@ class BackIndicator(
     ) {
         updateVelocity(distancePx)
 
-        val gestureProgress =
-            (distancePx / armDistancePx)
-                .coerceIn(0f, 1f)
+        val xDelta = distancePx - previousDistancePx
+        previousDistancePx = distancePx
 
-        // AOSP-style ENTRY / ACTIVE transition.
-        currentState =
-            if (gestureProgress < ACTIVE_THRESHOLD) {
-                GestureState.ENTRY
+        if (abs(xDelta) > 0f) {
+            if (sign(xDelta) == sign(totalTouchDeltaPx)) {
+                totalTouchDeltaPx += xDelta
             } else {
-                GestureState.ACTIVE
+                totalTouchDeltaPx = xDelta
+            }
+        }
+
+        val yOffset = rawY - anchorRawY
+        val yTranslation = abs(yOffset)
+
+        val minDeltaForSwitch =
+            32f * density
+
+        when (currentState) {
+            GestureState.ACTIVE -> {
+                if (
+                    (totalTouchDeltaPx < 0f &&
+                        -totalTouchDeltaPx > minDeltaForSwitch) ||
+                    (yTranslation > distancePx * 2f)
+                ) {
+                    deactivate()
+                }
             }
 
-        // --------------------------------------------------------------------
-        // Vertical rubber-band.
-        //
-        // This replaces the old FOLLOW_FRACTION model.
-        // --------------------------------------------------------------------
+            GestureState.INACTIVE -> {
+                if (
+                    totalTouchDeltaPx > 0f &&
+                        totalTouchDeltaPx > minDeltaForSwitch
+                ) {
+                    activate()
+                }
+            }
+
+            else -> {
+                // ENTRY / FLUNG / COMMITTED / CANCELLED / GONE
+            }
+        }
 
         panel.translationY =
             clampPanelY(
                 rubberBandPanelY(rawY)
             )
 
-        // AOSP uses different curves for different visual properties.
+        when (currentState) {
+            GestureState.ENTRY -> {
+                val gestureProgress =
+                    (distancePx / armDistancePx)
+                        .coerceIn(0f, 1f)
 
-        val horizontalProgress =
-            RUBBER_BAND_INTERPOLATOR.getInterpolation(
-                gestureProgress
-            )
+                val horizontalProgress =
+                    RUBBER_BAND_INTERPOLATOR.getInterpolation(
+                        gestureProgress
+                    )
 
-        /*
-         * 第一阶段只使用前 62% 的手势距离。
-         *
-         * 到达圆角正方形以后保持在那里，
-         * 不会因为继续慢慢拉就偷偷变圆。
-         */
-        val squareProgress =
-            (gestureProgress / 0.62f)
-                .coerceIn(0f, 1f)
+                val squareProgress =
+                    (gestureProgress / 0.62f)
+                        .coerceIn(0f, 1f)
 
-        val arrowProgress =
-            RUBBER_BAND_INTERPOLATOR.getInterpolation(
-                gestureProgress
-            )
+                val arrowProgress =
+                    RUBBER_BAND_INTERPOLATOR.getInterpolation(
+                        gestureProgress
+                    )
 
-        panel.setVisualState(
-            horizontalProgress = horizontalProgress,
-            backgroundProgress = squareProgress,
-            arrowProgress = arrowProgress,
-        )
+                panel.setVisualState(
+                    horizontalProgress = horizontalProgress,
+                    backgroundProgress = squareProgress,
+                    arrowProgress = arrowProgress,
+                )
+            }
+
+            GestureState.ACTIVE -> {
+                /*
+                 * ACTIVE 后保持当前已经实现好的圆形。
+                 *
+                 * 这里暂时不重新设计后续 stretch，
+                 * 先把 AOSP 的状态切换机制做正确。
+                 */
+                panel.setVisualState(
+                    horizontalProgress = 1f,
+                    backgroundProgress = 1f,
+                    arrowProgress = 1f,
+                )
+            }
+
+            GestureState.INACTIVE -> {
+                /*
+                 * deactivate() 已经把视觉状态恢复到
+                 * ENTRY/圆角方形，因此这里不能再被
+                 * distanceProgress 覆盖。
+                 */
+            }
+
+            else -> {
+            }
+        }
     }
 
+    private fun deactivate() {
+        if (currentState != GestureState.ACTIVE) return
+        currentState = GestureState.INACTIVE
+        panel.deactivate()
+    }
+    
     fun onArmed() {
+        if (currentState == GestureState.ACTIVE) return
+
         currentState = GestureState.ACTIVE
+
+        totalTouchDeltaPx = 0f
 
         panel.setVisualState(
             horizontalProgress = 1f,
             backgroundProgress = 1f,
             arrowProgress = 1f,
         )
-
         panel.activate()
     }
 
@@ -267,15 +329,16 @@ class BackIndicator(
         val gestureDuration =
             now - gestureStartTime
 
+        val shouldCommit =
+            fired && currentState == GestureState.ACTIVE
+
         val isFling =
-            fired &&
-                abs(lastVelocityPxPerSec) >= MIN_FLING_VELOCITY
+            shouldCommit &&
+            abs(lastVelocityPxPerSec) >= MIN_FLING_VELOCITY
 
         when {
             isFling -> finishFling(gestureDuration)
-
-            fired -> commitGesture()
-
+            shouldCommit -> commitGesture()
             else -> cancelGesture()
         }
     }
@@ -448,6 +511,7 @@ class BackIndicator(
         GONE,
         ENTRY,
         ACTIVE,
+        INACTIVE,
         FLUNG,
         COMMITTED,
         CANCELLED,
@@ -458,7 +522,7 @@ class BackIndicator(
         const val PILL_SIZE_DP = 48f
         const val PEEK_DP = 18f
 
-        const val ACTIVE_THRESHOLD = 0.55f
+        // const val ACTIVE_THRESHOLD = 0.55f
 
         const val RUBBER_BAND_AMOUNT = 15f
 
@@ -606,6 +670,15 @@ private class BackArrowView(
         invalidate()
     }
 
+    fun deactivate() {
+        if (!active) return
+
+        active = false
+
+        updateHorizontalTranslation()
+        invalidate()
+    }
+    
     fun activate() {
         if (active) return
 
