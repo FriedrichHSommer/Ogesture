@@ -18,6 +18,7 @@ import android.widget.FrameLayout
 import kotlin.math.abs
 import kotlin.math.sign
 import android.view.HapticFeedbackConstants
+import android.view.animation.DecelerateInterpolator
 
 /**
  * Edge-back indicator for Ogesture.
@@ -774,8 +775,7 @@ private class BackArrowView(
         // --------------------------------------------------------------------
 
         val shapeProgress =
-            (backgroundProgress / SQUARE_THRESHOLD)
-                .coerceIn(0f, 1f)
+            backgroundProgress.coerceIn(0f, 1f)
 
         val widthProgress =
             propertyInterpolator.getInterpolation(shapeProgress)
