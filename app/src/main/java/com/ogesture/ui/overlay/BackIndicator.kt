@@ -234,7 +234,16 @@ class BackIndicator(
                     totalTouchDeltaPx > 0f &&
                         totalTouchDeltaPx > minDeltaForSwitch
                 ) {
-                    activate()
+                    currentState = GestureState.ACTIVE
+                    totalTouchDeltaPx = 0f
+
+                    panel.setVisualState(
+                        horizontalProgress = 1f,
+                        backgroundProgress = 1f,
+                        arrowProgress = 1f,
+                    )
+
+                    panel.activate()
                 }
             }
 
