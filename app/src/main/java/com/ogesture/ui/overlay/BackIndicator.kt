@@ -18,7 +18,6 @@ import android.widget.FrameLayout
 import kotlin.math.abs
 import kotlin.math.sign
 import android.view.HapticFeedbackConstants
-import android.view.animation.DecelerateInterpolator
 
 /**
  * Edge-back indicator for Ogesture.
