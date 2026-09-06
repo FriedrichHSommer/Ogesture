@@ -605,7 +605,7 @@ private class BackArrowView(
         48f * density
 
     private val compressedWidth =
-        fullSize * 0.55f
+        fullSize * 0.30f
 
     private val compressedHeight =
         fullSize
