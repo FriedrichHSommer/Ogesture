@@ -587,7 +587,11 @@ private class BackArrowView(
     private var arrowProgress = 0f
 
     private var active = false
+    private var edgeCornerProgress = 0f
     private var jumpOffset = 0f
+
+    private var jumpAnimator: ValueAnimator? = null
+    private var shapeAnimator: ValueAnimator? = null
 
     private val propertyInterpolator =
         PathInterpolator(
@@ -684,7 +688,50 @@ private class BackArrowView(
 
         active = false
 
-        updateHorizontalTranslation()
+        jumpAnimator?.cancel()
+        shapeAnimator?.cancel()
+
+        /*
+         * 不要直接从圆形跳回完整圆角方形。
+         *
+         * INACTIVE 的第一帧应该已经是“压缩中的 resting shape”。
+         */
+        val startProgress = edgeCornerProgress
+
+        shapeAnimator = ValueAnimator.ofFloat(
+            startProgress,
+            0f,
+        ).apply {
+            duration = 90L
+            interpolator = DecelerateInterpolator()
+
+            addUpdateListener {
+                edgeCornerProgress = it.animatedValue as Float
+
+                /*
+                 * 同时向边缘跳半步。
+                 * 这一步和 shape transition 重叠。
+                 */
+                jumpOffset =
+                    -(1f - edgeCornerProgress) * 3f * density
+
+                updateHorizontalTranslation()
+                invalidate()
+            }
+
+            addListener(
+                object : AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(animation: Animator) {
+                        jumpOffset = 0f
+                        updateHorizontalTranslation()
+                        invalidate()
+                    }
+                }
+            )
+
+            start()
+        }
+
         invalidate()
     }
     
@@ -692,29 +739,48 @@ private class BackArrowView(
         if (active) return
 
         active = true
+        performHapticFeedback(HapticFeedbackConstants.CONFIRM)
 
-        performHapticFeedback(
-            HapticFeedbackConstants.CONFIRM
-        )
+        jumpAnimator?.cancel()
+        shapeAnimator?.cancel()
 
-        android.animation.ValueAnimator
-            .ofFloat(0f, 1f, 0f)
-            .apply {
-                duration = 120L
+        /*
+         * ACTIVE 的 resting shape 不是“先变成方形，再跳成圆”。
+         * 圆形和向内跳跃应该在同一个 transition 中发生。
+         */
+        shapeAnimator = ValueAnimator.ofFloat(
+            edgeCornerProgress,
+            1f,
+        ).apply {
+            duration = 90L
+            interpolator = DecelerateInterpolator()
 
-                interpolator =
-                    DecelerateInterpolator()
-
-                addUpdateListener {
-                    jumpOffset =
-                        (it.animatedValue as Float) *
-                            5f * density
-
-                    updateHorizontalTranslation()
-                }
-
-                start()
+            addUpdateListener {
+                edgeCornerProgress = it.animatedValue as Float
+                updateHorizontalTranslation()
+                invalidate()
             }
+
+            start()
+        }
+
+        jumpAnimator = ValueAnimator.ofFloat(
+            0f,
+            1f,
+            0f,
+        ).apply {
+            duration = 120L
+            interpolator = DecelerateInterpolator()
+
+            addUpdateListener {
+                jumpOffset =
+                    (it.animatedValue as Float) * 5f * density
+
+                updateHorizontalTranslation()
+            }
+
+            start()
+        }
 
         invalidate()
     }
@@ -940,11 +1006,8 @@ private class BackArrowView(
             currentHeight / 2f
 
         val cornerRadius =
-            if (active) {
-                circleCornerRadius
-            } else {
-                squareCornerRadius
-            }
+            squareCornerRadius +
+                (circleCornerRadius - squareCornerRadius) * edgeCornerProgress
 
         val edgeRadius =
             cornerRadius
