@@ -265,7 +265,7 @@ when (currentState) {
             )
 
         val squareProgress =
-            (gestureProgress / 0.62f)
+            (gestureProgress / 0.88f)
                 .coerceIn(0f, 1f)
 
         val arrowProgress =
@@ -292,7 +292,7 @@ GestureState.ACTIVE -> {
                 .coerceIn(0f, 1f)
 
         val progress =
-            (gestureProgress / 0.62f)
+            (gestureProgress / 0.88f)
                 .coerceIn(0f, 1f)
 
         panel.setVisualState(
@@ -590,7 +590,7 @@ private class BackArrowView(
     private val arrowPaint =
         Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
-            strokeWidth = 5f * density
+            strokeWidth = 4.5f * density
             strokeCap = Paint.Cap.SQUARE
             strokeJoin = Paint.Join.ROUND
         }
