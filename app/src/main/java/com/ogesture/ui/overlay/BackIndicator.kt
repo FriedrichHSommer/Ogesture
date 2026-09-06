@@ -590,7 +590,7 @@ private class BackArrowView(
     private val arrowPaint =
         Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
-            strokeWidth = 3f * density
+            strokeWidth = 5f * density
             strokeCap = Paint.Cap.SQUARE
             strokeJoin = Paint.Join.ROUND
         }
@@ -1920,7 +1920,7 @@ arrowHeight.snapTo(
             dy > 0f
         ) {
 val arrowCenterX =
-    rect.centerX() - 3f * density
+    rect.centerX() - 5f * density
 
 val arrowCenterY =
     rect.centerY()
