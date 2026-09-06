@@ -168,6 +168,15 @@ class BackIndicator(
     // Gesture lifecycle
     // ------------------------------------------------------------------------
 
+fun setShapeProgress(
+    progress: Float,
+) {
+    shapeProgress =
+        progress.coerceIn(0f, 1f)
+
+    invalidate()
+}
+    
 fun onGestureStart(rawY: Float) {
     panel.resetForGesture()
 
@@ -177,6 +186,7 @@ fun onGestureStart(rawY: Float) {
 
     anchorRawY = rawY
     anchorPanelY = pillY(rawY)
+
     val now = SystemClock.uptimeMillis()
 
     gestureStartTime = now
@@ -268,11 +278,13 @@ fun onGestureStart(rawY: Float) {
                         gestureProgress
                     )
 
-                panel.setVisualState(
-                    horizontalProgress = horizontalProgress,
-                    backgroundProgress = squareProgress,
-                    arrowProgress = arrowProgress,
-                )
+panel.setVisualState(
+    horizontalProgress = horizontalProgress,
+    backgroundProgress = squareProgress,
+    arrowProgress = arrowProgress,
+)
+
+panel.setShapeProgress(0f)
             }
 
             GestureState.ACTIVE -> {
@@ -287,40 +299,77 @@ fun onGestureStart(rawY: Float) {
                     backgroundProgress = 1f,
                     arrowProgress = 1f,
                 )
+                panel.setShapeProgress(1f)
             }
+            
 
-            GestureState.INACTIVE -> {
-                /*
-                 * deactivate() 已经把视觉状态恢复到
-                 * ENTRY/圆角方形，因此这里不能再被
-                 * distanceProgress 覆盖。
-                 */
-            }
+GestureState.INACTIVE -> {
+    val gestureProgress =
+        (distancePx / armDistancePx)
+            .coerceIn(0f, 1f)
+
+    val progress =
+        (gestureProgress / 0.62f)
+            .coerceIn(0f, 1f)
+
+    panel.setVisualState(
+        horizontalProgress =
+            RUBBER_BAND_INTERPOLATOR
+                .getInterpolation(gestureProgress),
+
+        backgroundProgress = progress,
+
+        arrowProgress =
+            RUBBER_BAND_INTERPOLATOR
+                .getInterpolation(gestureProgress),
+    )
+
+    panel.setShapeProgress(0f)
+}
 
             else -> {
             }
         }
     }
 
-    private fun deactivate(
-        distancePx: Float,
-    ) {
-        if (currentState != GestureState.ACTIVE) return
+fun deactivate(
+    compressedBackgroundProgress: Float,
+) {
+    jumpAnimator?.cancel()
 
-        currentState = GestureState.INACTIVE
+    /*
+     * 立即从圆形切换成 INACTIVE 的圆角方形。
+     * 不经过完整正方形。
+     */
+    shapeProgress = 0f
 
-        val gestureProgress =
-            (distancePx / armDistancePx)
-                .coerceIn(0f, 1f)
+    backgroundProgress =
+        compressedBackgroundProgress
+            .coerceIn(0f, 1f)
 
-        val compressedBackgroundProgress =
-            (gestureProgress / 0.62f)
-                .coerceIn(0f, 1f)
+    jumpAnimator =
+        ValueAnimator.ofFloat(
+            1f,
+            0f,
+        ).apply {
+            duration = 100L
+            interpolator = DecelerateInterpolator()
 
-        panel.deactivate(
-            compressedBackgroundProgress
-        )
-    }
+            addUpdateListener {
+                jumpOffset =
+                    (it.animatedValue as Float) *
+                        -3f * density
+
+                updateHorizontalTranslation()
+                invalidate()
+            }
+
+            start()
+        }
+
+    updateHorizontalTranslation()
+    invalidate()
+}
     
     fun onArmed() {
         if (currentState == GestureState.ACTIVE) return
@@ -586,8 +635,8 @@ private class BackArrowView(
     private var backgroundProgress = 0f
     private var arrowProgress = 0f
 
-    private var active = false
-    private var jumpOffset = 0f
+private var shapeProgress = 0f
+private var jumpOffset = 0f
 
     private var jumpAnimator: ValueAnimator? = null
 
@@ -677,26 +726,23 @@ private class BackArrowView(
         invalidate()
     }
 
-    fun setVisualState(
-        horizontalProgress: Float,
-        backgroundProgress: Float,
-    
-        arrowProgress: Float,
-        
-    ) {
-        this.horizontalProgress =
-            horizontalProgress.coerceIn(0f, 1f)
+fun setVisualState(
+    horizontalProgress: Float,
+    backgroundProgress: Float,
+    arrowProgress: Float,
+) {
+    this.horizontalProgress =
+        horizontalProgress.coerceIn(0f, 1f)
 
-        this.backgroundProgress =
-            backgroundProgress.coerceIn(0f, 1f)
+    this.backgroundProgress =
+        backgroundProgress.coerceIn(0f, 1f)
 
-        this.arrowProgress =
-            arrowProgress.coerceIn(0f, 1f)
+    this.arrowProgress =
+        arrowProgress.coerceIn(0f, 1f)
 
-        updateHorizontalTranslation()
-
-        invalidate()
-    }
+    updateHorizontalTranslation()
+    invalidate()
+}
 
     fun deactivate(
         compressedBackgroundProgress: Float,
@@ -743,45 +789,42 @@ private class BackArrowView(
         invalidate()
     }
     
-    fun activate(
-        onActivated: (() -> Unit)? = null,
-    ) {
-        if (active) return
+fun activate(
+    onActivated: (() -> Unit)? = null,
+) {
+    jumpAnimator?.cancel()
 
-        animatedBackground.cancel()
-        jumpAnimator?.cancel()
+    backgroundProgress = 1f
+    shapeProgress = 1f
 
-        backgroundProgress = 1f
-        active = true
+    performHapticFeedback(
+        HapticFeedbackConstants.CONFIRM
+    )
 
-        performHapticFeedback(
-            HapticFeedbackConstants.CONFIRM
-        )
+    jumpAnimator =
+        ValueAnimator.ofFloat(
+            0f,
+            1f,
+            0f,
+        ).apply {
+            duration = 120L
+            interpolator = DecelerateInterpolator()
 
-        jumpAnimator =
-            ValueAnimator.ofFloat(
-                0f,
-                1f,
-                0f,
-            ).apply {
-                duration = 120L
-                interpolator = DecelerateInterpolator()
+            addUpdateListener {
+                jumpOffset =
+                    (it.animatedValue as Float) *
+                        5f * density
 
-                addUpdateListener {
-                    jumpOffset =
-                        (it.animatedValue as Float) *
-                            5f * density
-
-                    updateHorizontalTranslation()
-                    invalidate()
-                }
-
-                start()
+                updateHorizontalTranslation()
+                invalidate()
             }
 
-        invalidate()
-        onActivated?.invoke()
-    }
+            start()
+        }
+
+    invalidate()
+    onActivated?.invoke()
+}
 
     /**
      * Continue the current visual state toward the final ACTIVE state.
@@ -1003,12 +1046,13 @@ private class BackArrowView(
         val circleCornerRadius =
             currentHeight / 2f
 
-        val cornerRadius =
-            if (active) {
-                circleCornerRadius
-            } else {
-                squareCornerRadius
-            }
+val cornerProgress =
+    this.shapeProgress.coerceIn(0f, 1f)
+
+val cornerRadius =
+    squareCornerRadius +
+        (circleCornerRadius - squareCornerRadius) *
+        cornerProgress
 
         val edgeRadius =
             cornerRadius
