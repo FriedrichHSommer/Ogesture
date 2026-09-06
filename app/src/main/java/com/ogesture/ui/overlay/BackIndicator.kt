@@ -56,7 +56,7 @@ class BackIndicator(
         val width = (pillSizePx + peekPx).toInt()
         val height = pillSizePx.toInt()
 
-        layoutParams = FrameLayout.LayoutParams(size, size).apply {
+        layoutParams = FrameLayout.LayoutParams(width, height).apply {
             gravity =
                 (if (fromLeftEdge) Gravity.START else Gravity.END) or
                     Gravity.TOP
