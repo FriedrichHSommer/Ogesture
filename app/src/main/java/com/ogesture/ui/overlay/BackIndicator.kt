@@ -605,7 +605,7 @@ private class BackArrowView(
         48f * density
 
     private val compressedWidth =
-        fullSize * 0.30f
+        0f
 
     private val compressedHeight =
         fullSize
@@ -988,6 +988,20 @@ private val circleAdditionalInset =
             }
         }
 
+fun stretchBy(
+    finalPosition: Float,
+    amount: Float,
+) {
+    val stretchedAmount =
+        amount * (
+            finalPosition - restingPosition
+        )
+
+    animation.animateToFinalPosition(
+        restingPosition + stretchedAmount
+    )
+}
+
         fun cancel() {
             animation.cancel()
         }
@@ -1106,40 +1120,33 @@ private val circleAdditionalInset =
          */
         cancelAnimations()
 
-        val widthProgress =
-            AOSP_ENTRY_WIDTH_INTERPOLATOR
-                .getInterpolation(
-                    this.backgroundProgress
-                )
-                .coerceIn(0f, 1f)
-
-        val currentWidth =
-            compressedWidth +
-                (
-                    fullSize - compressedWidth
-                ) *
-                widthProgress
-
-        val currentHeight =
-            fullSize
-
-        /*
-         * IMPORTANT:
-         *
-         * Once backgroundProgress reaches 1:
-         *
-         * width  = 48dp
-         * height = 48dp
-         *
-         * This is the exact rounded-square state used before ACTIVE.
-         */
-        backgroundWidth.snapTo(
-            currentWidth
+val widthProgress =
+    AOSP_ENTRY_WIDTH_INTERPOLATOR
+        .getInterpolation(
+            this.backgroundProgress
         )
+        .coerceIn(0f, 1f)
 
-        backgroundHeight.snapTo(
-            currentHeight
-        )
+/*
+ * AOSP-style ENTRY stretch:
+ *
+ * resting position = 0
+ * final position   = 48dp
+ *
+ * Therefore the indicator starts as a very thin
+ * rounded rectangle and springs toward the full
+ * 48dp width as the gesture progresses.
+ */
+backgroundWidth.stretchBy(
+    finalPosition = fullSize,
+    amount = widthProgress,
+)
+
+val currentWidth =
+    backgroundWidth.pos
+
+val currentHeight =
+    fullSize
 
 val corner =
     squareCornerRadius.coerceAtMost(
@@ -1161,7 +1168,7 @@ val corner =
         )
 
 horizontalTranslation.snapTo(
-    activeMargin
+    edgeMargin
 )
 
         val visibleArrowProgress =
@@ -1962,9 +1969,9 @@ val arrowCenterY =
 private val AOSP_ENTRY_WIDTH_INTERPOLATOR =
     PathInterpolator(
         0.19f,
-        0.85f,
+        1.27f,
         0.71f,
-        1f,
+        0.86f,
     )
 
     private val AOSP_ENTRY_HEIGHT_INTERPOLATOR =
