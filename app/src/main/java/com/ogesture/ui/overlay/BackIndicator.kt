@@ -631,18 +631,32 @@ private class BackArrowView(
      * translationX, not by translating the Canvas inside a 48dp View.
      */
 
-    private val edgeMargin =
-        4f * density
+/*
+ * Horizontal positions.
+ *
+ * The whole indicator in the previous version was too far from the
+ * screen edge. Keep the fully expanded 48x48 rounded square close
+ * to the edge, then move only a small distance inward before it
+ * becomes the circle.
+ */
 
-    private val activeMargin =
-        14f * density
+private val edgeMargin =
+    0f
 
-    /*
-     * This is the additional inward movement between the
-     * rounded square and the final circle.
-     */
-    private val circleAdditionalInset =
-        8f * density
+/*
+ * Position of the fully expanded 48x48 rounded square.
+ *
+ * Keep it close to the screen edge.
+ */
+private val activeMargin =
+    4f * density
+
+/*
+ * Additional inward movement after the pop, before morphing into
+ * the 48x48 circle.
+ */
+private val circleAdditionalInset =
+    6f * density
 
     /*
      * ------------------------------------------------------------------------
@@ -1911,40 +1925,27 @@ private class BackArrowView(
             val arrowCenterY =
                 rect.centerY()
 
-            val arrowPath =
-                Path().apply {
-                    if (fromLeftEdge) {
-                        moveTo(
-                            arrowCenterX + dx,
-                            arrowCenterY - dy,
-                        )
-
-                        lineTo(
-                            arrowCenterX,
-                            arrowCenterY,
-                        )
-
-                        lineTo(
-                            arrowCenterX + dx,
-                            arrowCenterY + dy,
-                        )
-                    } else {
-                        moveTo(
-                            arrowCenterX - dx,
-                            arrowCenterY - dy,
-                        )
-
-                        lineTo(
-                            arrowCenterX,
-                            arrowCenterY,
-                        )
-
-                        lineTo(
-                            arrowCenterX - dx,
-                            arrowCenterY + dy,
-                        )
-                    }
-                }
+    val arrowPath =
+    Path().apply {
+        /*
+         * Android back arrow always points left.
+         *
+         * This is true for gestures starting from both the
+         * left and right screen edges.
+         */
+        moveTo(
+            arrowCenterX + dx,
+            arrowCenterY - dy,
+        )
+        lineTo(
+            arrowCenterX,
+            arrowCenterY,
+        )
+        lineTo(
+            arrowCenterX + dx,
+            arrowCenterY + dy,
+        )
+    }
 
             canvas.drawPath(
                 arrowPath,
