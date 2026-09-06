@@ -1189,21 +1189,21 @@ private val circleAdditionalInset =
                     0.82f
             ).coerceIn(0f, 1f)
 
-        arrowLength.snapTo(
-            interpolate(
-                fullSize * 0.10f,
-                fullSize * 0.26f,
-                visibleArrowProgress,
-            )
-        )
+arrowLength.snapTo(
+    interpolate(
+        fullSize * 0.08f,
+        fullSize * 0.20f,
+        visibleArrowProgress,
+    )
+)
 
-        arrowHeight.snapTo(
-            interpolate(
-                fullSize * 0.05f,
-                fullSize * 0.13f,
-                visibleArrowProgress,
-            )
-        )
+arrowHeight.snapTo(
+    interpolate(
+        fullSize * 0.08f,
+        fullSize * 0.18f,
+        visibleArrowProgress,
+    )
+)
 
         arrowAlpha.snapTo(
             visibleArrowProgress
@@ -1300,13 +1300,13 @@ private val circleAdditionalInset =
             activeMargin
         )
 
-        arrowLength.snapTo(
-            fullSize * 0.26f
-        )
+arrowLength.snapTo(
+    fullSize * 0.20f
+)
 
-        arrowHeight.snapTo(
-            fullSize * 0.13f
-        )
+arrowHeight.snapTo(
+    fullSize * 0.18f
+)
 
         arrowAlpha.snapTo(1f)
         backgroundAlpha.snapTo(1f)
@@ -1919,11 +1919,11 @@ private val circleAdditionalInset =
             dx > 0f &&
             dy > 0f
         ) {
-            val arrowCenterX =
-                rect.centerX()
+val arrowCenterX =
+    rect.centerX() - 3f * density
 
-            val arrowCenterY =
-                rect.centerY()
+val arrowCenterY =
+    rect.centerY()
 
     val arrowPath =
     Path().apply {
