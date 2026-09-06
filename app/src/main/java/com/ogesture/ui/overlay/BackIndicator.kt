@@ -318,6 +318,7 @@ when (currentState) {
     else -> {
     }
 }
+}
 
 private fun deactivate(
     distancePx: Float,
