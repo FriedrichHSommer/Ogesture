@@ -167,16 +167,7 @@ class BackIndicator(
     // ------------------------------------------------------------------------
     // Gesture lifecycle
     // ------------------------------------------------------------------------
-
-fun setShapeProgress(
-    progress: Float,
-) {
-    shapeProgress =
-        progress.coerceIn(0f, 1f)
-
-    invalidate()
-}
-    
+   
 fun onGestureStart(rawY: Float) {
     panel.resetForGesture()
 
@@ -278,6 +269,26 @@ fun onGestureStart(rawY: Float) {
                         gestureProgress
                     )
 
+private fun deactivate(
+    distancePx: Float,
+) {
+    if (currentState != GestureState.ACTIVE) return
+
+    currentState = GestureState.INACTIVE
+
+    val gestureProgress =
+        (distancePx / armDistancePx)
+            .coerceIn(0f, 1f)
+
+    val compressedBackgroundProgress =
+        (gestureProgress / 0.62f)
+            .coerceIn(0f, 1f)
+
+    panel.deactivate(
+        compressedBackgroundProgress
+    )
+}
+                    
 panel.setVisualState(
     horizontalProgress = horizontalProgress,
     backgroundProgress = squareProgress,
@@ -331,46 +342,7 @@ GestureState.INACTIVE -> {
             }
         }
     }
-
-fun deactivate(
-    compressedBackgroundProgress: Float,
-) {
-    jumpAnimator?.cancel()
-
-    /*
-     * 立即从圆形切换成 INACTIVE 的圆角方形。
-     * 不经过完整正方形。
-     */
-    shapeProgress = 0f
-
-    backgroundProgress =
-        compressedBackgroundProgress
-            .coerceIn(0f, 1f)
-
-    jumpAnimator =
-        ValueAnimator.ofFloat(
-            1f,
-            0f,
-        ).apply {
-            duration = 100L
-            interpolator = DecelerateInterpolator()
-
-            addUpdateListener {
-                jumpOffset =
-                    (it.animatedValue as Float) *
-                        -3f * density
-
-                updateHorizontalTranslation()
-                invalidate()
-            }
-
-            start()
-        }
-
-    updateHorizontalTranslation()
-    invalidate()
-}
-    
+   
     fun onArmed() {
         if (currentState == GestureState.ACTIVE) return
 
@@ -709,23 +681,32 @@ private var jumpOffset = 0f
             android.content.res.Configuration.UI_MODE_NIGHT_YES
     }
 
-    fun resetForGesture() {
-        jumpAnimator?.cancel()
-        animatedHorizontal.cancel()
-        animatedBackground.cancel()
-        animatedArrow.cancel()
+fun resetForGesture() {
+    jumpAnimator?.cancel()
+    animatedHorizontal.cancel()
+    animatedBackground.cancel()
+    animatedArrow.cancel()
 
-        active = false
-        jumpOffset = 0f
+    shapeProgress = 0f
+    jumpOffset = 0f
 
-        horizontalProgress = 0f
-        backgroundProgress = 0f
-        arrowProgress = 0f
+    horizontalProgress = 0f
+    backgroundProgress = 0f
+    arrowProgress = 0f
 
-        updateHorizontalTranslation()
-        invalidate()
-    }
+    updateHorizontalTranslation()
+    invalidate()
+}
 
+fun setShapeProgress(
+    progress: Float,
+) {
+    shapeProgress =
+        progress.coerceIn(0f, 1f)
+
+    invalidate()
+}
+    
 fun setVisualState(
     horizontalProgress: Float,
     backgroundProgress: Float,
@@ -744,50 +725,40 @@ fun setVisualState(
     invalidate()
 }
 
-    fun deactivate(
-        compressedBackgroundProgress: Float,
-    ) {
-        if (!active) return
+fun deactivate(
+    compressedBackgroundProgress: Float,
+) {
+    jumpAnimator?.cancel()
 
-        active = false
+    shapeProgress = 0f
 
-        jumpAnimator?.cancel()
+    backgroundProgress =
+        compressedBackgroundProgress
+            .coerceIn(0f, 1f)
 
-        /*
-         * AOSP 的 INACTIVE 状态不是：
-         *
-         *     圆 → 完整正方形 → 压缩
-         *
-         * 而是直接切换到 ENTRY/INACTIVE 的 resting shape。
-         *
-         * 这里保留当前手指位置对应的压缩程度，
-         * 因此第一帧就是“已经压缩的圆角方形”。
-         */
-        backgroundProgress =
-            compressedBackgroundProgress.coerceIn(0f, 1f)
+    jumpAnimator =
+        ValueAnimator.ofFloat(
+            1f,
+            0f,
+        ).apply {
+            duration = 100L
+            interpolator = DecelerateInterpolator()
 
-        jumpAnimator =
-            ValueAnimator.ofFloat(
-                3f * density,
-                0f,
-            ).apply {
-                duration = 80L
-                interpolator = DecelerateInterpolator()
+            addUpdateListener {
+                jumpOffset =
+                    (it.animatedValue as Float) *
+                        -3f * density
 
-                addUpdateListener {
-                    jumpOffset =
-                        -(it.animatedValue as Float)
-
-                    updateHorizontalTranslation()
-                    invalidate()
-                }
-
-                start()
+                updateHorizontalTranslation()
+                invalidate()
             }
 
-        updateHorizontalTranslation()
-        invalidate()
-    }
+            start()
+        }
+
+    updateHorizontalTranslation()
+    invalidate()
+}
     
 fun activate(
     onActivated: (() -> Unit)? = null,
