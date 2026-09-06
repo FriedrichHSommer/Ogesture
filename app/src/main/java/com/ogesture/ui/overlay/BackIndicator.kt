@@ -264,9 +264,9 @@ when (currentState) {
                 gestureProgress
             )
 
-        val squareProgress =
-            (gestureProgress / 0.92f)
-                .coerceIn(0f, 1f)
+val squareProgress =
+    gestureProgress
+        .coerceIn(0f, 1f)
 
         val arrowProgress =
             RUBBER_BAND_INTERPOLATOR.getInterpolation(
@@ -1959,13 +1959,13 @@ val arrowCenterY =
             progress.coerceIn(0f, 1f)
     }
 
-    private val AOSP_ENTRY_WIDTH_INTERPOLATOR =
-        PathInterpolator(
-            0.19f,
-            1.27f,
-            0.71f,
-            0.86f,
-        )
+private val AOSP_ENTRY_WIDTH_INTERPOLATOR =
+    PathInterpolator(
+        0.19f,
+        0.85f,
+        0.71f,
+        1f,
+    )
 
     private val AOSP_ENTRY_HEIGHT_INTERPOLATOR =
         PathInterpolator(
