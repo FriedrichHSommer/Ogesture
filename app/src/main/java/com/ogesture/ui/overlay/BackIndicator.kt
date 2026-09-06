@@ -228,7 +228,7 @@ class BackIndicator(
                         -totalTouchDeltaPx > minDeltaForSwitch) ||
                     (yTranslation > distancePx * 2f)
                 ) {
-                    deactivate()
+                    deactivate(distancePx)
                 }
             }
 
@@ -237,16 +237,11 @@ class BackIndicator(
                     totalTouchDeltaPx > 0f &&
                         totalTouchDeltaPx > minDeltaForSwitch
                 ) {
-                    currentState = GestureState.ACTIVE
                     totalTouchDeltaPx = 0f
 
-                    panel.setVisualState(
-                        horizontalProgress = 1f,
-                        backgroundProgress = 1f,
-                        arrowProgress = 1f,
-                    )
-
-                    panel.activate()
+                    panel.activate {
+                        currentState = GestureState.ACTIVE
+                    }
                 }
             }
 
@@ -314,25 +309,34 @@ class BackIndicator(
         }
     }
 
-    private fun deactivate() {
+    private fun deactivate(
+        distancePx: Float,
+    ) {
         if (currentState != GestureState.ACTIVE) return
+
         currentState = GestureState.INACTIVE
-        panel.deactivate()
+
+        val gestureProgress =
+            (distancePx / armDistancePx)
+                .coerceIn(0f, 1f)
+
+        val compressedBackgroundProgress =
+            (gestureProgress / 0.62f)
+                .coerceIn(0f, 1f)
+
+        panel.deactivate(
+            compressedBackgroundProgress
+        )
     }
     
     fun onArmed() {
         if (currentState == GestureState.ACTIVE) return
 
-        currentState = GestureState.ACTIVE
-
         totalTouchDeltaPx = 0f
 
-        panel.setVisualState(
-            horizontalProgress = 1f,
-            backgroundProgress = 1f,
-            arrowProgress = 1f,
-        )
-        panel.activate()
+        panel.activate {
+            currentState = GestureState.ACTIVE
+        }
     }
 
     fun onGestureEnd(fired: Boolean) {
@@ -590,11 +594,9 @@ private class BackArrowView(
     private var arrowProgress = 0f
 
     private var active = false
-    private var edgeCornerProgress = 0f
     private var jumpOffset = 0f
 
     private var jumpAnimator: ValueAnimator? = null
-    private var shapeAnimator: ValueAnimator? = null
 
     private val propertyInterpolator =
         PathInterpolator(
@@ -686,106 +688,126 @@ private class BackArrowView(
         invalidate()
     }
 
-    fun deactivate() {
+    fun deactivate(
+        compressedBackgroundProgress: Float,
+    ) {
         if (!active) return
 
         active = false
 
         jumpAnimator?.cancel()
-        shapeAnimator?.cancel()
 
         /*
-         * 不要直接从圆形跳回完整圆角方形。
+         * AOSP 的 INACTIVE 状态不是：
          *
-         * INACTIVE 的第一帧应该已经是“压缩中的 resting shape”。
+         *     圆 → 完整正方形 → 压缩
+         *
+         * 而是直接切换到 ENTRY/INACTIVE 的 resting shape。
+         *
+         * 这里保留当前手指位置对应的压缩程度，
+         * 因此第一帧就是“已经压缩的圆角方形”。
          */
-        val startProgress = edgeCornerProgress
+        backgroundProgress =
+            compressedBackgroundProgress.coerceIn(0f, 1f)
 
-        shapeAnimator = ValueAnimator.ofFloat(
-            startProgress,
-            0f,
-        ).apply {
-            duration = 90L
-            interpolator = DecelerateInterpolator()
+        jumpAnimator =
+            ValueAnimator.ofFloat(
+                3f * density,
+                0f,
+            ).apply {
+                duration = 80L
+                interpolator = DecelerateInterpolator()
 
-            addUpdateListener {
-                edgeCornerProgress = it.animatedValue as Float
+                addUpdateListener {
+                    jumpOffset =
+                        -(it.animatedValue as Float)
 
-                /*
-                 * 同时向边缘跳半步。
-                 * 这一步和 shape transition 重叠。
-                 */
-                jumpOffset =
-                    -(1f - edgeCornerProgress) * 3f * density
+                    updateHorizontalTranslation()
+                    invalidate()
+                }
 
-                updateHorizontalTranslation()
-                invalidate()
+                start()
             }
 
-            addListener(
-                object : AnimatorListenerAdapter() {
-                    override fun onAnimationEnd(animation: Animator) {
-                        jumpOffset = 0f
-                        updateHorizontalTranslation()
-                        invalidate()
-                    }
-                }
-            )
-
-            start()
-        }
-
+        updateHorizontalTranslation()
         invalidate()
     }
     
-    fun activate() {
+    fun activate(
+        onExpanded: (() -> Unit)? = null,
+    ) {
         if (active) return
 
-        active = true
-        performHapticFeedback(HapticFeedbackConstants.CONFIRM)
-
-        jumpAnimator?.cancel()
-        shapeAnimator?.cancel()
-
         /*
-         * ACTIVE 的 resting shape 不是“先变成方形，再跳成圆”。
-         * 圆形和向内跳跃应该在同一个 transition 中发生。
+         * 先把当前已经压缩的圆角方形展开到完整正方形。
+         *
+         * 这一步结束以后，才真正切换成圆形。
          */
-        shapeAnimator = ValueAnimator.ofFloat(
-            edgeCornerProgress,
+        jumpAnimator?.cancel()
+
+        animatedBackground.cancel()
+
+        animatedBackground.setFloatValues(
+            backgroundProgress,
             1f,
-        ).apply {
-            duration = 90L
-            interpolator = DecelerateInterpolator()
+        )
 
-            addUpdateListener {
-                edgeCornerProgress = it.animatedValue as Float
-                updateHorizontalTranslation()
-                invalidate()
-            }
+        animatedBackground.duration = 80L
+        animatedBackground.interpolator =
+            DecelerateInterpolator()
 
-            start()
+        animatedBackground.removeAllUpdateListeners()
+        animatedBackground.addUpdateListener {
+            backgroundProgress =
+                it.animatedValue as Float
+
+            invalidate()
         }
 
-        jumpAnimator = ValueAnimator.ofFloat(
-            0f,
-            1f,
-            0f,
-        ).apply {
-            duration = 120L
-            interpolator = DecelerateInterpolator()
+        animatedBackground.removeAllListeners()
+        animatedBackground.addListener(
+            object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(
+                    animation: Animator,
+                ) {
+                    active = true
 
-            addUpdateListener {
-                jumpOffset =
-                    (it.animatedValue as Float) * 5f * density
+                    performHapticFeedback(
+                    HapticFeedbackConstants.CONFIRM
+                    )
 
-                updateHorizontalTranslation()
+                    /*
+                     * 正方形 → 圆形和 jump 在同一瞬间发生。
+                     */
+                    jumpAnimator =
+                        ValueAnimator.ofFloat(
+                            0f,
+                            1f,
+                            0f,
+                        ).apply {
+                            duration = 120L
+                            interpolator =
+                                DecelerateInterpolator()
+    
+                            addUpdateListener {
+                                jumpOffset =
+                                    (it.animatedValue as Float) *
+                                        5f * density
+    
+                                updateHorizontalTranslation()
+                                invalidate()
+                            }
+
+                            start()
+                        }
+
+                    invalidate()
+                    onExpanded?.invoke()
+                }
             }
-
-            start()
-        }
-
-        invalidate()
+        )
+    
+        animatedBackground.start()
     }
 
     /**
@@ -1009,8 +1031,11 @@ private class BackArrowView(
             currentHeight / 2f
 
         val cornerRadius =
-            squareCornerRadius +
-                (circleCornerRadius - squareCornerRadius) * edgeCornerProgress
+            if (active) {
+                circleCornerRadius
+            } else {
+                squareCornerRadius
+            }
 
         val edgeRadius =
             cornerRadius
