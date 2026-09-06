@@ -265,7 +265,7 @@ when (currentState) {
             )
 
         val squareProgress =
-            (gestureProgress / 0.88f)
+            (gestureProgress / 0.92f)
                 .coerceIn(0f, 1f)
 
         val arrowProgress =
@@ -292,7 +292,7 @@ GestureState.ACTIVE -> {
                 .coerceIn(0f, 1f)
 
         val progress =
-            (gestureProgress / 0.88f)
+            (gestureProgress / 0.92f)
                 .coerceIn(0f, 1f)
 
         panel.setVisualState(
@@ -608,7 +608,7 @@ private class BackArrowView(
         fullSize * 0.17f
 
     private val compressedHeight =
-        fullSize * 0.78f
+        fullSize
 
     private val squareCornerRadius =
         fullSize * 0.32f
@@ -1113,13 +1113,6 @@ private val circleAdditionalInset =
                 )
                 .coerceIn(0f, 1f)
 
-        val heightProgress =
-            AOSP_ENTRY_HEIGHT_INTERPOLATOR
-                .getInterpolation(
-                    this.backgroundProgress
-                )
-                .coerceIn(0f, 1f)
-
         val currentWidth =
             compressedWidth +
                 (
@@ -1128,11 +1121,7 @@ private val circleAdditionalInset =
                 widthProgress
 
         val currentHeight =
-            compressedHeight +
-                (
-                    fullSize - compressedHeight
-                ) *
-                heightProgress
+            fullSize
 
         /*
          * IMPORTANT:
@@ -1152,14 +1141,10 @@ private val circleAdditionalInset =
             currentHeight
         )
 
-        val corner =
-            interpolate(
-                compressedHeight * 0.32f,
-                squareCornerRadius,
-                backgroundProgress,
-            ).coerceAtMost(
-                currentHeight / 2f
-            )
+val corner =
+    squareCornerRadius.coerceAtMost(
+        currentWidth / 2f
+    )
 
         backgroundEdgeCornerRadius.snapTo(
             corner
