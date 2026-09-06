@@ -168,27 +168,28 @@ class BackIndicator(
     // Gesture lifecycle
     // ------------------------------------------------------------------------
 
-    fun onGestureStart(rawY: Float) {
-        panel.resetForGesture()
+fun onGestureStart(rawY: Float) {
+    panel.resetForGesture()
 
-        anchorRawY = rawY
-        anchorPanelY = pillY(rawY)
+    panel.alpha = 1f
+    panel.scaleX = 1f
+    panel.scaleY = 1f
 
-        val now = SystemClock.uptimeMillis()
+    anchorRawY = rawY
+    anchorPanelY = pillY(rawY)
+    val now = SystemClock.uptimeMillis()
 
-        gestureStartTime = now
-        lastProgressTime = now
-        lastProgressDistance = 0f
-        lastVelocityPxPerSec = 0f
-        previousDistancePx = 0f
-        totalTouchDeltaPx = 0f
+    gestureStartTime = now
+    lastProgressTime = now
+    lastProgressDistance = 0f
+    lastVelocityPxPerSec = 0f
+    previousDistancePx = 0f
+    totalTouchDeltaPx = 0f
 
-        panel.translationY = clampPanelY(anchorPanelY)
+    panel.translationY = clampPanelY(anchorPanelY)
 
-        currentState = GestureState.ENTRY
-
-        panel.resetForGesture()
-    }
+    currentState = GestureState.ENTRY
+}
 
     fun onGestureProgress(
         distancePx: Float,
