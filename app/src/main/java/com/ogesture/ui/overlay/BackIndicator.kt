@@ -6,105 +6,137 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PixelFormat
 import android.graphics.Rect
+import android.graphics.RectF
 import android.os.Build
+import android.os.SystemClock
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
+import android.view.animation.DecelerateInterpolator
+import android.view.animation.PathInterpolator
 import android.widget.FrameLayout
-import android.os.SystemClock
+import kotlin.math.abs
+import kotlin.math.sign
 
 /**
- * A gesture-navigation style back arrow that peeks out from a side edge while the user
- * drags, mirroring the system back indicator: it slides out with the drag, pulses when
- * the gesture arms, and retracts (or fades out) when the finger lifts.
+ * Edge-back indicator for Ogesture.
  *
- * Lives in its own non-touchable full-height overlay window so it can be drawn without
- * affecting the touch zones.
+ * The overlay/window handling remains specific to Ogesture, while the gesture
+ * motion model follows the AOSP BackPanel behaviour more closely:
+ *
+ * - ENTRY -> ACTIVE states
+ * - independent horizontal/background/arrow progress
+ * - AOSP-style vertical rubber-banding
+ * - fling minimum appearance duration
  */
 class BackIndicator(
     context: Context,
     private val windowManager: WindowManager,
     private val fromLeftEdge: Boolean,
     private val armDistancePx: Float,
-    /**
-     * How far in from the physical edge the arrow should peek — the nav-bar inset when
-     * the 3-button bar occupies this edge (landscape), else 0. Without it the arrow
-     * would slide out underneath the opaque bar and never be seen.
-     */
     private val edgeOffsetPx: Int = 0,
     private val zoneLengthPx: Int = 0,
 ) : OverlayIndicator {
+
     private val density = context.resources.displayMetrics.density
-    private val pillSizePx = (PILL_SIZE_DP * density)
-    private val peekPx = (PEEK_DP * density)
+
+    private val pillSizePx = PILL_SIZE_DP * density
+    private val peekPx = PEEK_DP * density
 
     private val root = FrameLayout(context)
-    private val arrow = BackArrowView(context, fromLeftEdge).apply {
+
+    private val panel = BackArrowView(context, fromLeftEdge).apply {
         val size = pillSizePx.toInt()
+
         layoutParams = FrameLayout.LayoutParams(size, size).apply {
-            gravity = (if (fromLeftEdge) Gravity.START else Gravity.END) or Gravity.TOP
+            gravity =
+                (if (fromLeftEdge) Gravity.START else Gravity.END) or
+                    Gravity.TOP
         }
+
         alpha = 0f
     }
+
     private var attached = false
     private var windowHidden = false
+
     private val windowLocation = IntArray(2)
+
     private var anchorRawY = 0f
+    private var anchorPanelY = 0f
+
     private var gestureStartTime = 0L
+
     private var lastProgressTime = 0L
     private var lastProgressDistance = 0f
     private var lastVelocityPxPerSec = 0f
 
+    private var currentState = GestureState.GONE
+
     init {
-        root.addView(arrow)
+        root.addView(panel)
     }
 
     override fun attach() {
         if (attached) return
+
         val params = WindowManager.LayoutParams(
-    (pillSizePx + peekPx).toInt(),
-    zoneLengthPx + 2 * pillSizePx.toInt(),
-    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-        WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-    PixelFormat.TRANSLUCENT,
-).apply {
-    gravity =
-        (if (fromLeftEdge) Gravity.START else Gravity.END) or
-            Gravity.CENTER_VERTICAL
+            (pillSizePx + peekPx).toInt(),
+            zoneLengthPx + 2 * pillSizePx.toInt(),
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT,
+        ).apply {
 
-    x = edgeOffsetPx
+            gravity =
+                (if (fromLeftEdge) Gravity.START else Gravity.END) or
+                    Gravity.CENTER_VERTICAL
 
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-        fitInsetsTypes = 0
-    }
-}
+            x = edgeOffsetPx
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                fitInsetsTypes = 0
+            }
+        }
+
         try {
             windowManager.addView(root, params)
             attached = true
         } catch (_: Throwable) {
-            // Indicator is cosmetic; the gesture keeps working without it.
+            // Indicator is cosmetic; the gesture itself can continue without it.
         }
     }
 
     override fun detach() {
         if (!attached) return
+
         try {
             windowManager.removeView(root)
         } catch (_: Throwable) {
         }
+
         attached = false
     }
 
     override fun setWindowHidden(hidden: Boolean) {
         if (!attached) return
+
         windowHidden = hidden
-        val lp = root.layoutParams as? WindowManager.LayoutParams ?: return
-        val newAlpha = if (hidden) 0f else 1f
+
+        val lp =
+            root.layoutParams as? WindowManager.LayoutParams
+                ?: return
+
+        val newAlpha =
+            if (hidden) 0f else 1f
+
         if (lp.alpha == newAlpha) return
+
         lp.alpha = newAlpha
+
         try {
             windowManager.updateViewLayout(root, lp)
         } catch (_: Throwable) {
@@ -113,312 +145,775 @@ class BackIndicator(
 
     override fun windowBounds(): Rect? {
         if (!attached || windowHidden) return null
+
         val loc = IntArray(2)
+
         root.getLocationOnScreen(loc)
-        return Rect(loc[0], loc[1], loc[0] + root.width, loc[1] + root.height)
+
+        return Rect(
+            loc[0],
+            loc[1],
+            loc[0] + root.width,
+            loc[1] + root.height,
+        )
     }
+
+    // ------------------------------------------------------------------------
+    // Gesture lifecycle
+    // ------------------------------------------------------------------------
 
     fun onGestureStart(rawY: Float) {
-        arrow.animate().cancel()
+        panel.animate().cancel()
 
-        arrow.scaleX = 1f
-        arrow.scaleY = 1f
-        arrow.alpha = 1f
-   
+        panel.alpha = 1f
+        panel.scaleX = 1f
+        panel.scaleY = 1f
+
         anchorRawY = rawY
+        anchorPanelY = pillY(rawY)
 
-    val now = SystemClock.uptimeMillis()
-    gestureStartTime = now
-    lastProgressTime = now
-    lastProgressDistance = 0f
-    lastVelocityPxPerSec = 0f
+        val now = SystemClock.uptimeMillis()
 
-    arrow.translationY = pillY(rawY).coerceIn(
-        0f,
-        (root.height - pillSizePx).coerceAtLeast(0f)
-    )
+        gestureStartTime = now
+        lastProgressTime = now
+        lastProgressDistance = 0f
+        lastVelocityPxPerSec = 0f
 
-    applyProgress(0f)
-}
+        panel.translationY = clampPanelY(anchorPanelY)
 
-    fun onGestureProgress(distancePx: Float, rawY: Float) {
-    val now = SystemClock.uptimeMillis()
-    val dt = now - lastProgressTime
+        currentState = GestureState.ENTRY
 
-    if (dt > 0L) {
-        val distanceDelta = distancePx - lastProgressDistance
-        lastVelocityPxPerSec =
-            (distanceDelta / dt.toFloat()) * 1000f
+        panel.setVisualState(
+            horizontalProgress = 0f,
+            backgroundProgress = 0f,
+            arrowProgress = 0f,
+        )
     }
 
-    lastProgressTime = now
-    lastProgressDistance = distancePx
+    fun onGestureProgress(
+        distancePx: Float,
+        rawY: Float,
+    ) {
+        updateVelocity(distancePx)
 
-    arrow.translationY = pillY(followedRawY(rawY)).coerceIn(
-        0f,
-        (root.height - pillSizePx).coerceAtLeast(0f)
-    )
+        val gestureProgress =
+            (distancePx / armDistancePx)
+                .coerceIn(0f, 1f)
 
-    applyProgress(
-        (distancePx / armDistancePx).coerceIn(0f, 1f)
-    )
-}
+        // AOSP-style ENTRY / ACTIVE transition.
+        currentState =
+            if (gestureProgress < ACTIVE_THRESHOLD) {
+                GestureState.ENTRY
+            } else {
+                GestureState.ACTIVE
+            }
 
-    /**
-     * The pill anchors where the gesture began and only drifts a fraction of the finger's
-     * vertical travel, so it nods toward the drag without chasing the finger.
-     */
-    private fun followedRawY(rawY: Float): Float =
-        anchorRawY + (rawY - anchorRawY) * FOLLOW_FRACTION
+        // --------------------------------------------------------------------
+        // Vertical rubber-band.
+        //
+        // This replaces the old FOLLOW_FRACTION model.
+        // --------------------------------------------------------------------
 
-    /** rawY is in display coordinates; the window may not start at display y=0. */
-    private fun pillY(rawY: Float): Float {
-        root.getLocationOnScreen(windowLocation)
-        return rawY -
-    windowLocation[1] -
-    pillSizePx / 2f -
-    48f * density
-}
+        panel.translationY =
+            clampPanelY(
+                rubberBandPanelY(rawY)
+            )
+
+        // AOSP uses different curves for different visual properties.
+
+        val horizontalProgress =
+            RUBBER_BAND_INTERPOLATOR.getInterpolation(
+                gestureProgress
+            )
+
+        val backgroundProgress =
+            DECELERATE_INTERPOLATOR.getInterpolation(
+                gestureProgress
+            )
+
+        val arrowProgress =
+            RUBBER_BAND_INTERPOLATOR.getInterpolation(
+                gestureProgress
+            )
+
+        panel.setVisualState(
+            horizontalProgress = horizontalProgress,
+            backgroundProgress = backgroundProgress,
+            arrowProgress = arrowProgress,
+        )
+    }
 
     fun onArmed() {
-        applyProgress(1f)
+        currentState = GestureState.ACTIVE
+
+        panel.setVisualState(
+            horizontalProgress = 1f,
+            backgroundProgress = 1f,
+            arrowProgress = 1f,
+        )
     }
 
     fun onGestureEnd(fired: Boolean) {
-    val retractX = if (fromLeftEdge) -pillSizePx else pillSizePx
+        val now = SystemClock.uptimeMillis()
 
-    val now = SystemClock.uptimeMillis()
-    val gestureDuration = now - gestureStartTime
+        val gestureDuration =
+            now - gestureStartTime
 
-    val isFling =
-        fired &&
-        lastVelocityPxPerSec >= 3000f
+        val isFling =
+            fired &&
+                abs(lastVelocityPxPerSec) >= MIN_FLING_VELOCITY
 
-    if (isFling) {
+        when {
+            isFling -> finishFling(gestureDuration)
+
+            fired -> commitGesture()
+
+            else -> cancelGesture()
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // End states
+    // ------------------------------------------------------------------------
+
+    private fun finishFling(
+        gestureDuration: Long,
+    ) {
+        currentState = GestureState.FLUNG
+
         val remaining =
-            (235L - gestureDuration).coerceAtLeast(0L)
+            (FLING_MIN_APPEARANCE_DURATION - gestureDuration)
+                .coerceAtLeast(0L)
 
-        arrow.animate().cancel()
+        /*
+         * Important:
+         *
+         * Unlike the old version, this is a real property animation.
+         * The panel continues from its CURRENT visual state toward ACTIVE.
+         */
 
-        arrow.animate()
-            .setDuration(remaining)
-            .setInterpolator(
-                android.view.animation.DecelerateInterpolator()
-            )
-            .start()
+        panel.animateToState(
+            horizontalProgress = 1f,
+            backgroundProgress = 1f,
+            arrowProgress = 1f,
+            duration = remaining,
+        ) {
+            commitGesture()
+        }
+    }
 
-        arrow.postDelayed({
-            arrow.setRevealProgress(1f)
+    private fun commitGesture() {
+        currentState = GestureState.COMMITTED
 
-            arrow.animate()
-                .translationX(retractX)
-                .alpha(0f)
-                .setDuration(120L)
-                .setInterpolator(
-                    android.view.animation.DecelerateInterpolator(2f)
-                )
-                .start()
-        }, remaining)
-    } else {
-        arrow.animate()
+        val retractX =
+            if (fromLeftEdge) {
+                -pillSizePx
+            } else {
+                pillSizePx
+            }
+
+        panel.animate()
             .translationX(retractX)
             .alpha(0f)
-            .setDuration(if (fired) 120L else 180L)
+            .setDuration(COMMIT_DURATION)
             .setInterpolator(
-                android.view.animation.DecelerateInterpolator(2f)
+                DecelerateInterpolator(2f)
             )
+            .withEndAction {
+                currentState = GestureState.GONE
+            }
             .start()
     }
-}
 
-    /** 0 = fully hidden behind the edge, 1 = fully peeked out. */
-    
-    private fun applyProgress(fraction: Float) {
-    val edgeMargin = 4f * density
-    val activeMargin = 14f * density
+    private fun cancelGesture() {
+        currentState = GestureState.CANCELLED
 
-    arrow.translationX = if (fromLeftEdge) {
-        edgeMargin + (activeMargin - edgeMargin) * fraction
-    } else {
-        -edgeMargin - (activeMargin - edgeMargin) * fraction
+        val retractX =
+            if (fromLeftEdge) {
+                -pillSizePx
+            } else {
+                pillSizePx
+            }
+
+        panel.animate()
+            .translationX(retractX)
+            .alpha(0f)
+            .setDuration(CANCEL_DURATION)
+            .setInterpolator(
+                DecelerateInterpolator(2f)
+            )
+            .withEndAction {
+                currentState = GestureState.GONE
+            }
+            .start()
     }
 
-    arrow.setRevealProgress(fraction)
-}
+    // ------------------------------------------------------------------------
+    // Velocity
+    // ------------------------------------------------------------------------
+
+    private fun updateVelocity(
+        distancePx: Float,
+    ) {
+        val now = SystemClock.uptimeMillis()
+
+        val dt =
+            now - lastProgressTime
+
+        if (dt > 0L) {
+            val distanceDelta =
+                distancePx - lastProgressDistance
+
+            lastVelocityPxPerSec =
+                distanceDelta / dt.toFloat() * 1000f
+        }
+
+        lastProgressTime = now
+        lastProgressDistance = distancePx
+    }
+
+    // ------------------------------------------------------------------------
+    // Vertical positioning
+    // ------------------------------------------------------------------------
+
+    private fun rubberBandPanelY(
+        rawY: Float,
+    ): Float {
+
+        val fingerOffset =
+            rawY - anchorRawY
+
+        /*
+         * The maximum normal vertical movement is approximately half of the
+         * available indicator window. Larger finger movement is compressed
+         * through the AOSP rubber-band curve.
+         */
+
+        val availableRange =
+            ((root.height - pillSizePx) / 2f)
+                .coerceAtLeast(1f)
+
+        val progress =
+            (
+                abs(fingerOffset) /
+                    (availableRange * RUBBER_BAND_AMOUNT)
+                )
+                .coerceIn(0f, 1f)
+
+        val rubberBandDistance =
+            RUBBER_BAND_INTERPOLATOR.getInterpolation(progress) *
+                availableRange *
+                sign(fingerOffset)
+
+        return anchorPanelY + rubberBandDistance
+    }
+
+    private fun clampPanelY(
+        y: Float,
+    ): Float {
+        return y.coerceIn(
+            0f,
+            (root.height - pillSizePx)
+                .coerceAtLeast(0f),
+        )
+    }
+
+    /**
+     * rawY is in display coordinates; convert it into overlay coordinates.
+     *
+     * The indicator remains slightly above the finger, matching the behaviour
+     * you observed from the Pixel system gesture.
+     */
+    private fun pillY(
+        rawY: Float,
+    ): Float {
+
+        root.getLocationOnScreen(windowLocation)
+
+        return rawY -
+            windowLocation[1] -
+            pillSizePx / 2f -
+            48f * density
+    }
+
+    private enum class GestureState {
+        GONE,
+        ENTRY,
+        ACTIVE,
+        FLUNG,
+        COMMITTED,
+        CANCELLED,
+    }
 
     private companion object {
+
         const val PILL_SIZE_DP = 48f
         const val PEEK_DP = 18f
 
-        // Vertical follow: the pill moves this fraction of the finger's vertical travel,
-        // so it hints at the drag direction without tracking it.
-        const val FOLLOW_FRACTION = 1f
+        const val ACTIVE_THRESHOLD = 0.55f
+
+        const val RUBBER_BAND_AMOUNT = 15f
+
+        const val MIN_FLING_VELOCITY = 3000f
+        const val FLING_MIN_APPEARANCE_DURATION = 235L
+
+        const val COMMIT_DURATION = 120L
+        const val CANCEL_DURATION = 180L
+
+        val RUBBER_BAND_INTERPOLATOR =
+            PathInterpolator(
+                0.2f,
+                1f,
+                1f,
+                1f,
+            )
+
+        val DECELERATE_INTERPOLATOR =
+            DecelerateInterpolator()
     }
 }
 
-/** A round dark pill with a left-pointing "back" chevron, whichever edge it comes from. */
+/**
+ * Visual component of the back gesture indicator.
+ *
+ * Each visual property is controlled independently instead of deriving the
+ * entire shape from a single revealProgress value.
+ */
 private class BackArrowView(
     context: Context,
-    private val fromLeftEdge: Boolean
+    private val fromLeftEdge: Boolean,
 ) : View(context) {
 
-    private val density = context.resources.displayMetrics.density
+    private val density =
+        context.resources.displayMetrics.density
 
-    private val pillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL
-        alpha = 255
-    }
+    private val pillPaint =
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            alpha = 255
+        }
 
-    private val arrowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeWidth = 3.0f * density
-        strokeCap = Paint.Cap.ROUND
-        strokeJoin = Paint.Join.ROUND
-    }
+    private val arrowPaint =
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 3f * density
+            strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
+        }
 
-    private var revealProgress = 0f
-    
-    private val widthInterpolator =
-        android.view.animation.PathInterpolator(
-            0.19f, 1.27f,
-            0.71f, 0.86f
+    private var horizontalProgress = 0f
+    private var backgroundProgress = 0f
+    private var arrowProgress = 0f
+
+    private val propertyInterpolator =
+        PathInterpolator(
+            0.19f,
+            1.27f,
+            0.71f,
+            0.86f,
         )
+
+    private val animatedHorizontal =
+        android.animation.ValueAnimator.ofFloat(0f, 0f)
+
+    private val animatedBackground =
+        android.animation.ValueAnimator.ofFloat(0f, 0f)
+
+    private val animatedArrow =
+        android.animation.ValueAnimator.ofFloat(0f, 0f)
 
     init {
-        val resources = context.resources
 
-        val backgroundId = resources.getIdentifier(
-            if (isNightMode(resources)) {
-                "system_accent2_700"
+        val resources =
+            context.resources
+
+        val backgroundId =
+            resources.getIdentifier(
+                if (isNightMode(resources)) {
+                    "system_accent2_700"
+                } else {
+                    "system_accent2_100"
+                },
+                "color",
+                "android",
+            )
+
+        val arrowId =
+            resources.getIdentifier(
+                if (isNightMode(resources)) {
+                    "system_accent1_200"
+                } else {
+                    "system_accent1_700"
+                },
+                "color",
+                "android",
+            )
+
+        pillPaint.color =
+            if (backgroundId != 0) {
+                context.getColor(backgroundId)
             } else {
-                "system_accent2_100"
-            },
-            "color",
-            "android"
-        )
+                0xFFD3D9B7.toInt()
+            }
 
-        val arrowId = resources.getIdentifier(
-            if (isNightMode(resources)) {
-                "system_accent1_200"
+        arrowPaint.color =
+            if (arrowId != 0) {
+                context.getColor(arrowId)
             } else {
-                "system_accent1_700"
-            },
-            "color",
-            "android"
-        )
-
-        pillPaint.color = if (backgroundId != 0) {
-            context.getColor(backgroundId)
-        } else {
-            0xFFD3D9B7.toInt()
-        }
-
-        arrowPaint.color = if (arrowId != 0) {
-            context.getColor(arrowId)
-        } else {
-            0xFF3E4229.toInt()
-        }
+                0xFF3E4229.toInt()
+            }
     }
 
-    private fun isNightMode(resources: android.content.res.Resources): Boolean {
-        return (resources.configuration.uiMode and
-            android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+    private fun isNightMode(
+        resources: android.content.res.Resources,
+    ): Boolean {
+        return (
+            resources.configuration.uiMode and
+                android.content.res.Configuration.UI_MODE_NIGHT_MASK
+            ) ==
             android.content.res.Configuration.UI_MODE_NIGHT_YES
     }
 
-    fun setRevealProgress(progress: Float) {
-        revealProgress = progress.coerceIn(0f, 1f)
+    fun setVisualState(
+        horizontalProgress: Float,
+        backgroundProgress: Float,
+        arrowProgress: Float,
+    ) {
+
+        this.horizontalProgress =
+            horizontalProgress.coerceIn(0f, 1f)
+
+        this.backgroundProgress =
+            backgroundProgress.coerceIn(0f, 1f)
+
+        this.arrowProgress =
+            arrowProgress.coerceIn(0f, 1f)
+
+        updateHorizontalTranslation()
+
         invalidate()
     }
 
-    override fun onDraw(canvas: Canvas) {
+    /**
+     * Continue the current visual state toward the final ACTIVE state.
+     *
+     * Used only for fast fling gestures.
+     */
+    fun animateToState(
+        horizontalProgress: Float,
+        backgroundProgress: Float,
+        arrowProgress: Float,
+        duration: Long,
+        onEnd: () -> Unit,
+    ) {
+
+        if (duration <= 0L) {
+            setVisualState(
+                horizontalProgress,
+                backgroundProgress,
+                arrowProgress,
+            )
+
+            onEnd()
+
+            return
+        }
+
+        animatedHorizontal.cancel()
+        animatedBackground.cancel()
+        animatedArrow.cancel()
+
+        animatedHorizontal.setFloatValues(
+            this.horizontalProgress,
+            horizontalProgress,
+        )
+
+        animatedBackground.setFloatValues(
+            this.backgroundProgress,
+            backgroundProgress,
+        )
+
+        animatedArrow.setFloatValues(
+            this.arrowProgress,
+            arrowProgress,
+        )
+
+        animatedHorizontal.duration = duration
+        animatedBackground.duration = duration
+        animatedArrow.duration = duration
+
+        val interpolator =
+            DecelerateInterpolator()
+
+        animatedHorizontal.interpolator = interpolator
+        animatedBackground.interpolator = interpolator
+        animatedArrow.interpolator = interpolator
+
+        animatedHorizontal.removeAllUpdateListeners()
+        animatedBackground.removeAllUpdateListeners()
+        animatedArrow.removeAllUpdateListeners()
+
+        animatedHorizontal.addUpdateListener {
+            this.horizontalProgress =
+                it.animatedValue as Float
+
+            updateHorizontalTranslation()
+            invalidate()
+        }
+
+        animatedBackground.addUpdateListener {
+            this.backgroundProgress =
+                it.animatedValue as Float
+
+            invalidate()
+        }
+
+        animatedArrow.addUpdateListener {
+            this.arrowProgress =
+                it.animatedValue as Float
+
+            invalidate()
+        }
+
+        animatedArrow.removeAllListeners()
+
+        animatedArrow.addListener(
+            object : android.animation.AnimatorListenerAdapter() {
+
+                override fun onAnimationEnd(
+                    animation: android.animation.Animator,
+                ) {
+                    onEnd()
+                }
+            },
+        )
+
+        animatedHorizontal.start()
+        animatedBackground.start()
+        animatedArrow.start()
+    }
+
+    private fun updateHorizontalTranslation() {
+
+        val edgeMargin =
+            4f * density
+
+        val activeMargin =
+            14f * density
+
+        translationX =
+            if (fromLeftEdge) {
+
+                edgeMargin +
+                    (activeMargin - edgeMargin) *
+                    horizontalProgress
+
+            } else {
+
+                -edgeMargin -
+                    (activeMargin - edgeMargin) *
+                    horizontalProgress
+            }
+    }
+
+    override fun onDraw(
+        canvas: Canvas,
+    ) {
+
         super.onDraw(canvas)
 
-        val viewWidth = width.toFloat()
-        val viewHeight = height.toFloat()
+        val viewWidth =
+            width.toFloat()
 
-        // AOSP 风格的展开曲线。
+        val viewHeight =
+            height.toFloat()
+
+        // --------------------------------------------------------------------
+        // Background
+        // --------------------------------------------------------------------
+
         val widthProgress =
-        widthInterpolator.getInterpolation(
-            (revealProgress * 0.65f).coerceIn(0f, 1f)
-        )
-
-        val minWidth = viewHeight * 0.17f
-
-        val currentWidth =
-            minWidth + (viewHeight - minWidth) * widthProgress
-
-        val halfHeight = viewHeight / 2f
-
-        val rect = if (fromLeftEdge) {
-            android.graphics.RectF(
-                0f,
-                0f,
-                currentWidth,
-                viewHeight
+            propertyInterpolator.getInterpolation(
+                (backgroundProgress * 0.65f)
+                    .coerceIn(0f, 1f)
             )
-        } else {
-            android.graphics.RectF(
-                viewWidth - currentWidth,
-                0f,
-                viewWidth,
-                viewHeight
-            )
-        }
-
-        canvas.drawRoundRect(
-            rect,
-            halfHeight,
-            halfHeight,
-            pillPaint
-        )
-
-        // 箭头在背景展开到约 23% 后开始出现。
-        val arrowProgress =
-            ((revealProgress - 0.23f) / 0.77f)
                 .coerceIn(0f, 1f)
 
-        arrowPaint.alpha = (arrowProgress * 255f).toInt()
+        /*
+         * AOSP-style entry:
+         *
+         * Start as a narrow rounded rectangle near the edge,
+         * then gradually become a complete circle.
+         */
 
-        if (arrowProgress > 0f) {
-            /*
-             * 无论从哪一侧触发，Back 指示器都保持 <。
-             * 这与当前 Pixel 上观察到的 AOSP 表现一致。
-             */
-            val arrowCenterX =
-                if (fromLeftEdge) {
-                    currentWidth / 2f
-                } else {
-                    viewWidth - currentWidth / 2f
-                }
+        val minWidth =
+            viewHeight * 0.17f
 
-            val arrowCenterY = viewHeight / 2f
+        val currentWidth =
+            minWidth +
+                (viewHeight - minWidth) *
+                widthProgress
 
-            val arm = viewWidth * 0.13f
-            val tip = arrowCenterX - arm * 0.7f
-            val tail = arrowCenterX + arm * 0.7f
+        /*
+         * Height changes slightly during entry rather than remaining completely
+         * fixed. This makes the initial shape feel more like a compressed panel.
+         */
 
-            val chevron = Path()
+        val minHeight =
+            viewHeight * 0.78f
 
-            chevron.moveTo(
-                tail,
-                arrowCenterY - arm * 1.4f
-            )
+        val currentHeight =
+            minHeight +
+                (viewHeight - minHeight) *
+                backgroundProgress
 
-            chevron.lineTo(
-                tip,
-                arrowCenterY
-            )
+        val top =
+            (viewHeight - currentHeight) / 2f
 
-            chevron.lineTo(
-                tail,
-                arrowCenterY + arm * 1.4f
-            )
+        val bottom =
+            top + currentHeight
 
-            canvas.drawPath(
-                chevron,
-                arrowPaint
-            )
+        val rect =
+            if (fromLeftEdge) {
+
+                RectF(
+                    0f,
+                    top,
+                    currentWidth,
+                    bottom,
+                )
+
+            } else {
+
+                RectF(
+                    viewWidth - currentWidth,
+                    top,
+                    viewWidth,
+                    bottom,
+                )
+            }
+
+        /*
+         * The edge and far corners intentionally evolve differently.
+         *
+         * This is closer to the AOSP BackPanel model than using one fixed
+         * round-rect radius.
+         */
+
+        val edgeRadius =
+            currentHeight / 2f
+
+        val farRadius =
+            currentHeight *
+                (
+                    0.32f +
+                        0.18f * backgroundProgress
+                    )
+
+        val radii =
+            if (fromLeftEdge) {
+
+                floatArrayOf(
+                    edgeRadius, edgeRadius,
+                    farRadius, farRadius,
+                    farRadius, farRadius,
+                    edgeRadius, edgeRadius,
+                )
+
+            } else {
+
+                floatArrayOf(
+                    farRadius, farRadius,
+                    edgeRadius, edgeRadius,
+                    edgeRadius, edgeRadius,
+                    farRadius, farRadius,
+                )
+            }
+
+        val backgroundPath =
+            Path()
+
+        backgroundPath.addRoundRect(
+            rect,
+            radii,
+            Path.Direction.CW,
+        )
+
+        canvas.drawPath(
+            backgroundPath,
+            pillPaint,
+        )
+
+        // --------------------------------------------------------------------
+        // Arrow
+        // --------------------------------------------------------------------
+
+        val visibleArrowProgress =
+            ((arrowProgress - 0.18f) / 0.82f)
+                .coerceIn(0f, 1f)
+
+        arrowPaint.alpha =
+            (visibleArrowProgress * 255f)
+                .toInt()
+
+        if (visibleArrowProgress <= 0f) {
+            return
         }
+
+        val arrowCenterX =
+            if (fromLeftEdge) {
+                currentWidth / 2f
+            } else {
+                viewWidth - currentWidth / 2f
+            }
+
+        val arrowCenterY =
+            viewHeight / 2f
+
+        /*
+         * Arrow dimensions also stretch independently.
+         */
+
+        val minArm =
+            viewHeight * 0.05f
+
+        val maxArm =
+            viewHeight * 0.13f
+
+        val arm =
+            minArm +
+                (maxArm - minArm) *
+                visibleArrowProgress
+
+        val tip =
+            arrowCenterX -
+                arm * 0.7f
+
+        val tail =
+            arrowCenterX +
+                arm * 0.7f
+
+        val chevron =
+            Path()
+
+        chevron.moveTo(
+            tail,
+            arrowCenterY - arm * 1.4f,
+        )
+
+        chevron.lineTo(
+            tip,
+            arrowCenterY,
+        )
+
+        chevron.lineTo(
+            tail,
+            arrowCenterY + arm * 1.4f,
+        )
+
+        canvas.drawPath(
+            chevron,
+            arrowPaint,
+        )
     }
 }
