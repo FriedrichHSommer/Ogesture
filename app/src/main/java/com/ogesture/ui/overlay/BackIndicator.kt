@@ -605,7 +605,7 @@ private class BackArrowView(
         48f * density
 
     private val compressedWidth =
-        fullSize * 0.17f
+        fullSize * 0.55f
 
     private val compressedHeight =
         fullSize
@@ -1160,13 +1160,9 @@ val corner =
             currentWidth / 2f
         )
 
-        horizontalTranslation.snapTo(
-            edgeMargin +
-                (
-                    activeMargin - edgeMargin
-                ) *
-                this.horizontalProgress
-        )
+horizontalTranslation.snapTo(
+    activeMargin
+)
 
         val visibleArrowProgress =
             (
