@@ -972,7 +972,10 @@ horizontalTranslation.snapTo(edgeMargin)
 
     internal fun setSpring(newSpring: SpringForce) {
         animation.cancel()
-        animation.spring = newSpring
+        animation.spring = SpringForce().apply {
+            dampingRatio = newSpring.dampingRatio
+            stiffness = newSpring.stiffness
+        }
     }
 
         fun snapToRestingPosition() {
