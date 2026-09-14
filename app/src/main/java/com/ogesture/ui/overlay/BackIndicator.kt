@@ -970,6 +970,11 @@ horizontalTranslation.snapTo(edgeMargin)
                 newPosition
         }
 
+    internal fun setSpring(newSpring: SpringForce) {
+        animation.cancel()
+        animation.spring = newSpring
+    }
+
         fun snapToRestingPosition() {
             snapTo(restingPosition)
         }
@@ -1036,17 +1041,10 @@ horizontalTranslation.snapTo(edgeMargin)
         backgroundAlpha.animationSpring(spring)
     }
 
-    private fun AnimatedFloat.animationSpring(
+        private fun AnimatedFloat.animationSpring(
         spring: SpringForce,
     ) {
-        cancel()
-
-        /*
-         * We cannot directly replace the private SpringAnimation from
-         * outside AnimatedFloat, so this helper intentionally remains empty.
-         *
-         * The default spring is already installed in AnimatedFloat.init().
-         */
+        setSpring(spring)
     }
 
     /*
