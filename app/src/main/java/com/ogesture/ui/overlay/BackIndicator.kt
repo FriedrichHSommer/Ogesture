@@ -413,6 +413,7 @@ fun onArmed() {
 
     private fun commitGesture() {
         currentState = GestureState.COMMITTED
+        panel.snapToFullCircle()
 
         val retractX =
             if (fromLeftEdge) {
@@ -977,6 +978,16 @@ horizontalTranslation.snapTo(edgeMargin)
             dampingRatio = newSpring.dampingRatio
             stiffness = newSpring.stiffness
         }
+    }
+
+    fun snapToFullCircle() {
+        backgroundWidth.snapTo(fullSize)
+        backgroundHeight.snapTo(fullSize)
+        backgroundEdgeCornerRadius.snapTo(circleCornerRadius)
+        backgroundFarCornerRadius.snapTo(circleCornerRadius)
+        arrowAlpha.snapTo(1f)
+        backgroundAlpha.snapTo(1f)
+        invalidate()
     }
 
     fun animateTo(newPosition: Float) {
