@@ -978,6 +978,11 @@ horizontalTranslation.snapTo(edgeMargin)
         }
     }
 
+    fun animateTo(newPosition: Float) {
+        restingPosition = newPosition
+        animation.animateToFinalPosition(newPosition)
+    }
+
         fun snapToRestingPosition() {
             snapTo(restingPosition)
         }
@@ -1108,12 +1113,6 @@ horizontalTranslation.snapTo(edgeMargin)
         // Intentionally unused.
     }
 
-    /*
-     * ------------------------------------------------------------------------
-     * Normal ENTRY / INACTIVE visual state
-     * ------------------------------------------------------------------------
-     */
-
     fun setVisualState(
         horizontalProgress: Float,
         backgroundProgress: Float,
@@ -1128,22 +1127,6 @@ horizontalTranslation.snapTo(edgeMargin)
         this.arrowProgress =
             arrowProgress.coerceIn(0f, 1f)
 
-        /*
-         * A new direct gesture state invalidates any previous physics
-         * animation.
-         */
-cancelAnimations()
-
-/*
- * ENTRY:
- *
- * The gesture itself directly controls the width.
- *
- * This deliberately does NOT use SpringAnimation.
- * Every gesture update must immediately produce a
- * visible width change, otherwise the spring gets
- * restarted before the user can see the stretch.
- */
 val widthProgress =
     AOSP_ENTRY_WIDTH_INTERPOLATOR
         .getInterpolation(
@@ -1160,7 +1143,7 @@ val currentWidth =
 val currentHeight =
     fullSize
 
-backgroundWidth.snapTo(
+backgroundWidth.animateTo(
     currentWidth
 )
 
@@ -1173,11 +1156,11 @@ val corner =
         currentWidth / 2f
     )
 
-        backgroundEdgeCornerRadius.snapTo(
+        backgroundEdgeCornerRadius.animateTo(
             corner
         )
 
-        backgroundFarCornerRadius.snapTo(
+        backgroundFarCornerRadius.animateTo(
             corner
         )
 
@@ -1197,7 +1180,7 @@ horizontalTranslation.snapTo(
                     0.82f
             ).coerceIn(0f, 1f)
 
-arrowLength.snapTo(
+arrowLength.animateTo(
     interpolate(
         fullSize * 0.08f,
         fullSize * 0.20f,
@@ -1205,7 +1188,7 @@ arrowLength.snapTo(
     )
 )
 
-arrowHeight.snapTo(
+arrowHeight.animateTo(
     interpolate(
         fullSize * 0.08f,
         fullSize * 0.18f,
@@ -1213,11 +1196,11 @@ arrowHeight.snapTo(
     )
 )
 
-        arrowAlpha.snapTo(
+        arrowAlpha.animateTo(
             visibleArrowProgress
         )
 
-        backgroundAlpha.snapTo(
+        backgroundAlpha.animateTo(
             this.backgroundProgress
         )
 
