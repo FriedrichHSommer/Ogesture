@@ -980,16 +980,6 @@ horizontalTranslation.snapTo(edgeMargin)
         }
     }
 
-    fun snapToFullCircle() {
-        backgroundWidth.snapTo(fullSize)
-        backgroundHeight.snapTo(fullSize)
-        backgroundEdgeCornerRadius.snapTo(circleCornerRadius)
-        backgroundFarCornerRadius.snapTo(circleCornerRadius)
-        arrowAlpha.snapTo(1f)
-        backgroundAlpha.snapTo(1f)
-        invalidate()
-    }
-
     fun animateTo(newPosition: Float) {
         restingPosition = newPosition
         animation.animateToFinalPosition(newPosition)
@@ -1221,16 +1211,16 @@ arrowHeight.animateTo(
         invalidate()
     }
 
-    /*
-     * ------------------------------------------------------------------------
-     * ACTIVE visual state
-     * ------------------------------------------------------------------------
-     *
-     * This is deliberately separate from setVisualState().
-     *
-     * Once activate() starts the AOSP-style spring animation, ordinary
-     * ACTIVE gesture progress must NOT cancel that animation.
-     */
+    fun snapToFullCircle() {
+        backgroundWidth.snapTo(fullSize)
+        backgroundHeight.snapTo(fullSize)
+        backgroundEdgeCornerRadius.snapTo(circleCornerRadius)
+        backgroundFarCornerRadius.snapTo(circleCornerRadius)
+        arrowAlpha.snapTo(1f)
+        backgroundAlpha.snapTo(1f)
+        invalidate()
+    }
+
 
     fun setActiveGestureState() {
         horizontalProgress = 1f
