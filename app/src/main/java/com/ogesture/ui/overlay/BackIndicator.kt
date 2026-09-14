@@ -392,7 +392,7 @@ fun onArmed() {
 
         val remaining =
             (FLING_MIN_APPEARANCE_DURATION - gestureDuration)
-                .coerceAtLeast(0L)
+                .coerceAtLeast(150L)
 
         /*
          * Important:
@@ -425,6 +425,7 @@ fun onArmed() {
             .translationX(retractX)
             .alpha(0f)
             .setDuration(COMMIT_DURATION)
+            .setStartDelay(150L)
             .setInterpolator(
                 DecelerateInterpolator(2f)
             )
