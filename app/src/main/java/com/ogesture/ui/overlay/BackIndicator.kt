@@ -237,6 +237,7 @@ fun onGestureStart(rawY: Float) {
                 ) {
                     totalTouchDeltaPx = 0f
 
+                    panel.gestureVelocityPxPerSec = abs(lastVelocityPxPerSec)
                     panel.activate {
                         currentState = GestureState.ACTIVE
                     }
@@ -356,6 +357,7 @@ fun onArmed() {
 
         totalTouchDeltaPx = 0f
 
+        panel.gestureVelocityPxPerSec = abs(lastVelocityPxPerSec)    
         panel.activate {
             currentState = GestureState.ACTIVE
         }
@@ -694,6 +696,7 @@ private val circleAdditionalInset =
      * 2 = move inward
      * 3 = circle
      */
+    var gestureVelocityPxPerSec = 0f
     private var activeAnimationGeneration = 0L
 
     /*
@@ -1327,8 +1330,8 @@ arrowHeight.snapTo(
          * 48 x 48 resting state.
          */
         val speedFactor =
-            (abs(lastVelocityPxPerSec) / 3000f).coerceIn(0.4f, 2.5f)
-
+            (abs(gestureVelocityPxPerSec) / 3000f).coerceIn(0.4f, 2.5f)
+            
         val startingVelocity =
             0.035f * density * speedFactor
 
