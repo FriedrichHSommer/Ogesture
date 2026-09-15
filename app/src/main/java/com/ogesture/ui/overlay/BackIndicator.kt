@@ -1137,7 +1137,6 @@ val widthProgress =
         .getInterpolation(
             this.backgroundProgress
         )
-        .coerceIn(0f, 1f)
 
 val currentWidth =
     compressedWidth +
