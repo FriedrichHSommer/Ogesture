@@ -1326,8 +1326,11 @@ arrowHeight.snapTo(
          * these are temporary stretches around the already-established
          * 48 x 48 resting state.
          */
+        val speedFactor =
+            (abs(lastVelocityPxPerSec) / 3000f).coerceIn(0.4f, 2.5f)
+
         val startingVelocity =
-            0.035f * density
+            0.035f * density * speedFactor
 
         val heightStretch =
             startingVelocity * 50f
