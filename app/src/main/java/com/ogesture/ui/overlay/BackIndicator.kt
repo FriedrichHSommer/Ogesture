@@ -638,7 +638,7 @@ private val compressedWidth =
         fullSize
 
     private val squareCornerRadius =
-        fullSize * 0.32f
+        fullSize / 2f
 
     private val circleCornerRadius =
         fullSize / 2f
