@@ -191,9 +191,8 @@ fun onGestureStart(rawY: Float) {
     lastVelocityPxPerSec = 0f
     previousDistancePx = 0f
     totalTouchDeltaPx = 0f
-
+    panel.restoreDefaultSpring()
     panel.snapY(clampPanelY(anchorPanelY))
-    
     currentState = GestureState.ENTRY
 }
 
@@ -274,7 +273,7 @@ GestureState.ENTRY -> {
     val entryStart = 0.10f
 
     val entryProgress =
-        ((rawProgress - entryStart) / (1f - entryStart))
+        ((rawProgress - entryStart) / 0.5f)
             .coerceIn(0f, 1f)
 
     val horizontalProgress =
@@ -393,6 +392,7 @@ fun onArmed() {
         gestureDuration: Long,
     ) {
         currentState = GestureState.FLUNG
+        panel.stiffenAll()
 
         val remaining =
             (FLING_MIN_APPEARANCE_DURATION - gestureDuration)
@@ -632,7 +632,7 @@ private class BackArrowView(
         48f * density
 
 private val compressedWidth =
-    fullSize * 0.25f
+    fullSize * 0.65f
 
     private val compressedHeight =
         fullSize
@@ -681,6 +681,20 @@ private val circleAdditionalInset =
     private var arrowProgress = 0f
     var gestureVelocityPxPerSec = 0f
 
+    fun stiffenAll() {
+        backgroundWidth.stiffen()
+        backgroundEdgeCornerRadius.stiffen()
+        backgroundFarCornerRadius.stiffen()
+        arrowLength.stiffen()
+        arrowHeight.stiffen()
+        arrowAlpha.stiffen()
+        backgroundAlpha.stiffen()
+    }
+
+    fun restoreDefaultSpring() {
+        applySpring(defaultSpring)
+    }
+    
     private val verticalFollow =
         SpringAnimation(
             this,
@@ -975,6 +989,14 @@ horizontalTranslation.snapTo(edgeMargin)
                 newPosition
         }
 
+    fun stiffen() {
+        animation.cancel()
+        animation.spring = SpringForce().apply {
+            dampingRatio = 1f
+            stiffness = 10000f
+        }
+    }
+        
     internal fun setSpring(newSpring: SpringForce) {
         animation.cancel()
         animation.spring = SpringForce().apply {
