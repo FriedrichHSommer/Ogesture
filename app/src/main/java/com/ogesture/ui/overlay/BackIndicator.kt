@@ -22,6 +22,7 @@ import kotlin.math.abs
 import kotlin.math.sign
 import android.view.HapticFeedbackConstants
 import androidx.dynamicanimation.animation.FloatPropertyCompat
+import androidx.dynamicanimation.animation.DynamicAnimation
 import androidx.dynamicanimation.animation.SpringAnimation
 import androidx.dynamicanimation.animation.SpringForce
 
@@ -191,8 +192,8 @@ fun onGestureStart(rawY: Float) {
     previousDistancePx = 0f
     totalTouchDeltaPx = 0f
 
-    panel.translationY = clampPanelY(anchorPanelY)
-
+    panel.snapY(clampPanelY(anchorPanelY))
+    
     currentState = GestureState.ENTRY
 }
 
@@ -249,10 +250,11 @@ fun onGestureStart(rawY: Float) {
             }
         }
 
-        panel.translationY =
+        panel.followY(
             clampPanelY(
                 rubberBandPanelY(rawY)
             )
+        )
 
 when (currentState) {
 
@@ -478,7 +480,8 @@ fun onArmed() {
                 distancePx - lastProgressDistance
 
             lastVelocityPxPerSec =
-                distanceDelta / dt.toFloat() * 1000f
+                lastVelocityPxPerSec * 0.5f +
+                    (distanceDelta / dt.toFloat() * 1000f) * 0.5f
         }
 
         lastProgressTime = now
@@ -687,16 +690,28 @@ private val circleAdditionalInset =
     private var horizontalProgress = 0f
     private var backgroundProgress = 0f
     private var arrowProgress = 0f
-
-    /*
-     * ACTIVE animation phase.
-     *
-     * 0 = normal gesture / rounded square
-     * 1 = pop
-     * 2 = move inward
-     * 3 = circle
-     */
     var gestureVelocityPxPerSec = 0f
+
+    private val verticalFollow =
+        SpringAnimation(
+            this,
+            DynamicAnimation.TRANSLATION_Y
+        ).apply {
+            spring = SpringForce().apply {
+                dampingRatio = 0.6f
+                stiffness = 700f
+            }
+        }
+
+    fun followY(y: Float) {
+        verticalFollow.animateToFinalPosition(y)
+    }
+
+    fun snapY(y: Float) {
+        verticalFollow.cancel()
+        translationY = y
+    }
+    
     private var activeAnimationGeneration = 0L
 
     /*
@@ -791,10 +806,8 @@ private val circleAdditionalInset =
 
     private val defaultSpring =
         SpringForce().apply {
-            dampingRatio =
-                SpringForce.DAMPING_RATIO_MEDIUM_BOUNCY
-            stiffness =
-                SpringForce.STIFFNESS_MEDIUM
+            dampingRatio = 0.29f
+            stiffness = 1500f
         }
 
     init {
@@ -944,10 +957,8 @@ horizontalTranslation.snapTo(edgeMargin)
                 ).apply {
                     spring =
                         SpringForce().apply {
-                            dampingRatio =
-                                SpringForce.DAMPING_RATIO_MEDIUM_BOUNCY
-                            stiffness =
-                                SpringForce.STIFFNESS_MEDIUM
+                            dampingRatio = 0.29f
+                            stiffness = 1500f
                         }
 
                     this@AnimatedFloat.minimumValue?.let {
