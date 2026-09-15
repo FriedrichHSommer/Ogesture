@@ -428,14 +428,18 @@ fun onArmed() {
 
         panel.animate()
             .translationX(retractX)
-            .alpha(0f)
-            .setDuration(COMMIT_DURATION)
-            .setStartDelay(150L)
+            .setDuration(120L)
             .setInterpolator(
                 DecelerateInterpolator(2f)
             )
             .withEndAction {
-                currentState = GestureState.GONE
+                panel.animate()
+                    .alpha(0f)
+                    .setDuration(100L)
+                    .withEndAction {
+                        currentState = GestureState.GONE
+                    }
+                    .start()
             }
             .start()
     }
