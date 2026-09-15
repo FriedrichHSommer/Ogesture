@@ -273,7 +273,7 @@ GestureState.ENTRY -> {
     val entryStart = 0.10f
 
     val entryProgress =
-        ((rawProgress - entryStart) / 0.5f)
+        ((rawProgress - entryStart) / 0.2f)
             .coerceIn(0f, 1f)
 
     val horizontalProgress =
@@ -632,7 +632,7 @@ private class BackArrowView(
         48f * density
 
 private val compressedWidth =
-    fullSize * 0.65f
+    fullSize * 0.8f
 
     private val compressedHeight =
         fullSize
