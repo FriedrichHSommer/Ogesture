@@ -1439,7 +1439,7 @@ horizontalTranslation.snapTo(edgeMargin)
  * This is the visible "pop/jump toward the center" phase.
  */
 horizontalTranslation.updateRestingPosition(
-    circleAdditionalInset,
+    activeMargin + circleAdditionalInset,
     animated = true,
 )
 
