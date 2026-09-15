@@ -668,28 +668,13 @@ private val compressedWidth =
  */
 
 private val edgeMargin =
-    4f
+    4f * density
 
-/*
- * Position of the fully expanded 48x48 rounded square.
- *
- * Keep it close to the screen edge.
- */
 private val activeMargin =
     14f * density
 
-/*
- * Additional inward movement after the pop, before morphing into
- * the 48x48 circle.
- */
 private val circleAdditionalInset =
     0f * density
-
-    /*
-     * ------------------------------------------------------------------------
-     * Gesture progress
-     * ------------------------------------------------------------------------
-     */
 
     private var horizontalProgress = 0f
     private var backgroundProgress = 0f
