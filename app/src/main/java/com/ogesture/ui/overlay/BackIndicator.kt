@@ -668,7 +668,7 @@ private val compressedWidth =
  */
 
 private val edgeMargin =
-    8f
+    4f
 
 /*
  * Position of the fully expanded 48x48 rounded square.
@@ -676,14 +676,14 @@ private val edgeMargin =
  * Keep it close to the screen edge.
  */
 private val activeMargin =
-    4f * density
+    14f * density
 
 /*
  * Additional inward movement after the pop, before morphing into
  * the 48x48 circle.
  */
 private val circleAdditionalInset =
-    6f * density
+    0f * density
 
     /*
      * ------------------------------------------------------------------------
